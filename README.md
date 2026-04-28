@@ -4,7 +4,8 @@
 
 ## 使用方法
 - Windows：拉取代码后，todo_app_v5为最新版本的已经打包好的文件夹，直接放在本地，点击文件夹中的.exe文件即可在本地运行。
-- Android：下载其中的app.apk文件，无视风险安装即可，app的使用教程见视频：
+- Android：下载其中的app.apk文件，无视风险安装即可，app的使用教程见视频：https://www.bilibili.com/video/BV1p99yBYEcP?vd_source=391ef5a06586cdb72b7afc9fdad35b3b  
+（该视频录制时还不包含备忘录功能）
 
 ## 功能特性
 
