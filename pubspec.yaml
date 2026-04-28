@@ -1,0 +1,67 @@
+name: todo_app
+description: A simple To-Do List application for Windows
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.6
+  window_manager: ^0.3.8
+  intl: ^0.19.0
+  shared_preferences: ^2.2.2
+
+  # Database
+  isar: ^3.1.0+1
+  isar_flutter_libs: ^3.1.0+1
+  path_provider: ^2.1.1
+
+  # UI Components
+  flutter_heatmap_calendar: 1.0.5
+
+  # Gamification
+  confetti: ^0.7.0
+  audioplayers: ^5.2.1
+
+  # Course Import
+  excel_wps: ^4.0.79
+  archive: ^3.6.1
+  xml: ^6.0.0
+  file_picker: ^8.0.0
+
+  # Android Widget
+  home_widget: ^0.6.0
+
+  # Markdown & LaTeX Support
+  flutter_markdown: ^0.6.18+3
+  markdown_widget: ^2.3.2+8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+
+  # Code Generation
+  build_runner: ^2.4.7
+  isar_generator: ^3.1.0+1
+
+  # App Icon Generator
+  flutter_launcher_icons: ^0.13.1
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  windows:
+    generate: true
+    icon_size: 256
+  image_path: "app_icon.png"
+  adaptive_icon_background: "#FFFFFF"
+  adaptive_icon_foreground: "app_icon.png"
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/sounds/
