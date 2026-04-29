@@ -97,6 +97,8 @@ app.*.map.json
 
 # ZIP archives
 *.zip
+# Exception: include distribution zip for Windows
+!todo_app_v5.zip
 
 # Excel files (personal data)
 *.xls
