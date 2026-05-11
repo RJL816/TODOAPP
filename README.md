@@ -1,161 +1,57 @@
-# Todo App
+﻿# 待办事项与课程表应用 (Todo App)
 
-一个功能丰富的待办事项管理应用，使用 Flutter 开发，支持 Windows 和 Android 平台。
+欢迎使用！这是一款集成了**目标打卡、日程管理、课程表和备忘录**的全能待办事项管理应用。
+本应用支持 Windows 与 Android 双平台运行，并结合了奖励反馈机制，让你的学习与生活管理变得更加轻松有趣。
 
-## 使用方法
-- Windows：拉取代码后，todo_app_v5为最新版本的已经打包好的文件夹，直接放在本地，点击文件夹中的.exe文件即可在本地运行。
-- Android：下载其中的app.apk文件，无视风险安装即可，app的使用教程见视频：https://www.bilibili.com/video/BV1p99yBYEcP?vd_source=391ef5a06586cdb72b7afc9fdad35b3b  
-（该视频录制时还不包含备忘录功能）
+## 🌟 主要功能
 
-## 功能特性
-
-### 核心功能
-- **任务管理** - 创建和管理一次性任务和每日打卡习惯
-- **任务类型区分**
-  - 一次性任务 (One-Time)：完成后第二天不再显示
-  - 每日重复任务 (Recurring)：每天自动重置，持续显示
-- **课程表导入** - 支持从 Excel 文件导入课程安排
-- **备忘录** - 快速记录笔记和想法
-- **数据持久化** - 使用 Isar 数据库本地存储
-
-### 游戏化元素
-- **连续打卡统计** - 显示连续完成任务的天数
-- **热力图** - 可视化展示每日完成情况
-- **完成动画** - 完成所有任务时播放庆祝动画
-- **音效反馈** - 点击完成时播放提示音
-
-### 平台支持
-- Windows 桌面应用
-- Android 移动应用（支持桌面小组件）
-
-## 技术栈
-
-- **框架**: Flutter 3.x
-- **语言**: Dart
-- **数据库**: Isar (高性能 Flutter 数据库)
-- **主要依赖**:
-  - `window_manager` - 窗口管理
-  - `shared_preferences` - 轻量级存储
-  - `flutter_heatmap_calendar` - 热力图日历
-  - `confetti` - 庆祝动画
-  - `audioplayers` - 音效播放
-  - `excel_wps` - Excel 文件解析
-  - `file_picker` - 文件选择器
-  - `home_widget` - Android 桌面小组件
-  - `flutter_markdown` - Markdown 渲染
-
-## 开始使用
-
-### 环境要求
-
-- Flutter SDK >= 3.0.0
-- Dart SDK >= 3.0.0
-- Windows 10/11 或 Android 5.0+
-
-### 安装步骤
-
-1. 克隆仓库
-```bash
-git clone https://github.com/your-username/todo_app.git
-cd todo_app
-```
-
-2. 安装依赖
-```bash
-flutter pub get
-```
-
-3. 生成代码 (Isar 数据库模型)
-```bash
-flutter pub run build_runner build
-```
-
-4. 运行应用
-```bash
-# Windows
-flutter run -d windows
-
-# Android
-flutter run -d android
-```
-
-### 构建 Release 版本
-
-```bash
-# Windows
-flutter build windows --release
-
-# Android APK
-flutter build apk --release
-
-# Android App Bundle
-flutter build appbundle --release
-```
-
-## 项目结构
-
-```
-lib/
-├── main.dart                      # 应用入口
-├── models/                        # 数据模型
-│   ├── course.dart               # 课程模型
-│   ├── daily_completion.dart     # 每日完成记录
-│   ├── memo.dart                 # 备忘录模型
-│   └── todo_item.dart            # 待办事项模型
-├── pages/                         # 页面
-│   ├── memo_page.dart            # 备忘录页面
-│   ├── schedule_page.dart        # 课程表页面
-│   └── statistics_page.dart      # 统计页面
-└── services/                      # 服务层
-    ├── autostart_service.dart    # 自动启动服务
-    ├── course_import_service.dart # 课程导入
-    ├── course_service.dart       # 课程管理
-    ├── excel_preprocessor.dart   # Excel 预处理
-    ├── gamification_service.dart # 游戏化服务
-    ├── isar_service.dart         # 数据库服务
-    ├── memo_service.dart         # 备忘录服务
-    └── widget_service.dart       # 小组件服务
-```
-
-## 使用说明
-
-### 添加任务
-1. 点击添加按钮创建新任务
-2. 选择任务类型（一次性/每日重复）
-3. 设置任务描述和可选时间
-4. 保存任务
-
-### 导入课程表
-1. 进入课程表页面
-2. 点击导入按钮
-3. 选择 Excel 文件 (.xlsx)
-4. 系统自动解析并导入课程
-
-### 查看统计
-- 热力图显示每日完成情况
-- 连续打卡天数统计
-- 任务完成率分析
-
-## 贡献指南
-
-欢迎提交 Issue 和 Pull Request！
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 许可证
-
-本项目采用 MIT 许可证 - 详见 [LICENSE](LICENSE) 文件
-
-## 致谢
-
-- [Flutter](https://flutter.dev/) - UI 框架
-- [Isar](https://isar.dev/) - 数据库
-- 所有依赖库的作者
+### 📋 任务与习惯管理
+- **一次性任务 (One-Time)**：适合临时安排的事情，完成后第二天自动隐藏。
+- **每日打卡 (Recurring)**：适合习惯养成，每天自动重置并持续追踪。
+![alt text](images/image1.png)
+### 📚 智能课程表
+- 每日上课时间与教室地点一目了然，再也不用担心走错教室。
+- 支持一键从 Excel (.xlsx) 文件导入教务系统标准课程表。
+![alt text](images/image3.png)
+![alt text](images/image4.png)
+![alt text](images/image5.png)
+### 📝 灵感备忘录
+- 方便快捷地记录日常灵感、学习重点笔记或购物清单。
+![alt text](images/image6.png)
+### 🎮 游戏化体验与数据统计
+- **热力图展示**：像 GitHub 提交记录一样，直观浏览过去每个月的打卡活跃度。
+- **连续打卡里程碑**：统计你的连续完成天数，见证你的每一次坚持。
+- **撒花庆祝动画**：完成当天所有待办后，满屏撒花，给予满满成就感。
+- **音效提示**：任务勾选时伴随清脆提示音，获得正向反馈！
+![alt text](images/image7.png)
+![alt text](images/image2.png)
+### 📱 多客户端支持
+- **Windows PC 端**：无需安装环境，双击直接运行。
+- **Android 移动端**：随时随地查看，添加了桌面桌面小组件 (Widget) 支持，免开应用洞悉进度。
 
 ---
 
-如有问题或建议，请提交 [Issue](https://github.com/your-username/todo_app/issues)
+## 🚀 下载与安装
+
+### Windows 端
+1. 下载本仓库中最新版本的解压包（如 	odo_app_v5.zip ) 或直接下载仓库中的 	odo_app_v5 文件夹。
+2. 放在你喜欢的位置，直接双击运行文件夹内的 	odo_app.exe 即可使用！
+
+### Android 端
+1. 找到仓库目录下最新的 APK 安装包（例如 app_v7.apk 或其他最新版本）。
+2. 下载到手机上，点击安装（如遇手机系统提示，请允许安装）。
+3. **视频上手教程**：[点击前往B站观看操作指南](https://www.bilibili.com/video/BV1p99yBYEcP?vd_source=391ef5a06586cdb72b7afc9fdad35b3b)  
+   *(注：该视频内容录制偏早，尚未包括现版本的“备忘录”和高级“热力图”等内容，欢迎你亲自下载体验！)*
+
+---
+
+## 🛠️ 基本使用入门
+
+- **添加任务**：点击首页“+”加号，设定标题描述，并确立是一次性解决还是每天都要做。
+- **导入课程**：切换至“课程表”页面，点击导入，选择设备里的 Excel 文件，系统即可智能提取排期生成日历。
+- **打卡复盘**：点击底部右侧按钮进入“统计”页面，纵观你的历史成果与努力数据。
+
+---
+
+如果你觉得这款应用对你有帮助，欢迎点亮右上角的 ⭐️ **Star** 鼓励一下作者！
+使用过程中遇到任何问题，或对新功能有期望，也十分欢迎随时提交 [Issue](https://github.com/RJL816/TODOAPP/issues)。
