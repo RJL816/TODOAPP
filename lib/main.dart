@@ -218,9 +218,14 @@ void main() async {
     await WidgetService.instance.syncExams(exams);
   }
 
-  // 初始化提醒服务并全量重排（Android 用系统排程；Windows 依赖托盘驻留）
-  await ReminderService.instance.init();
-  await ReminderService.instance.rescheduleAll();
+  // 初始化提醒服务并全量重排（Android 用系统排程；Windows 依赖托盘驻留）。
+  // 提醒初始化失败只意味着没有提醒，绝不能阻塞应用启动。
+  try {
+    await ReminderService.instance.init();
+    await ReminderService.instance.rescheduleAll();
+  } catch (e) {
+    debugPrint('提醒服务初始化失败（应用继续启动）: $e');
+  }
 
   // 初始化番茄钟（持久化目标结束时刻，恢复进行中的计时）
   await PomodoroService.instance.init();

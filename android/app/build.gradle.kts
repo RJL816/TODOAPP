@@ -37,6 +37,10 @@ android {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
+            // 资源收缩会把只在 Dart 字符串里引用的 @drawable/ic_notification
+            // 当作无引用资源删掉，导致通知初始化失败、应用启动白屏
+            isMinifyEnabled = false
+            isShrinkResources = false
         }
     }
 }
