@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.todo_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "28.2.13676358" // 本机已安装版本（flutter.ndkVersion 请求的 25.0.3 未安装）
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

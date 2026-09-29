@@ -140,3 +140,12 @@ docs/visual-qa/
 scripts/drive_app.ps1
 scripts/patch_main_*.py
 scripts/snap_today.ps1
+
+# 安装包与构建产物（发布到 GitHub Releases，不入仓库）
+*.apk
+todo_app_v3/
+todo_app_v4/
+todo_app_v5/
+todo_app_v5.zip
+todo_app_v3.zip
+flutter_*.log
