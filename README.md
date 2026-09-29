@@ -82,8 +82,11 @@ Windows 端免安装双击即用，可置顶、可最小到托盘；Android 端�
 
 | 平台 | 获取方式 |
 | --- | --- |
-| **Windows** | 下载最新 Release 中的 `todo_app_vX.X.X-windows.zip`，解压到任意位置，双击 `todo_app.exe` 即可，无需安装环境 |
+| **Windows（安装版）** | 下载最新 Release 中的 `todo_app_vX.X.X-setup.exe`，双击 → 下一步 → 完成，自动创建桌面快捷方式，自带卸载器，**无需管理员权限** |
+| **Windows（绿色版）** | 下载 `todo_app_vX.X.X-windows.zip`，解压到任意位置，双击 `todo_app.exe` 即可，无需安装；运行库已内置，解压即用 |
 | **Android** | 下载最新 Release 中的 `app-release.apk`，传到手机直接安装（如遇系统提示，请允许安装） |
+
+两种 Windows 版本数据通用（都存在"文档"和 AppData 目录），随时可以互换或共存同一版本。
 
 已安装的用户：应用启动时会静默检查新版本，发现新版会弹提示，点击即可前往下载。
 
