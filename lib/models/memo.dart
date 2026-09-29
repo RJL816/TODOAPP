@@ -82,7 +82,7 @@ class Memo {
     }
   }
 
-  /// 转换为 JSON（用于调试或导出）
+  /// 转换为 JSON（用于备份导出）
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
@@ -93,6 +93,19 @@ class Memo {
         'isDeleted': isDeleted,
         'deletedAt': deletedAt?.toIso8601String(),
       };
+
+  /// 从 JSON 创建（用于备份恢复）
+  factory Memo.fromJson(Map<String, dynamic> json) => Memo()
+    ..id = (json['id'] as int?) ?? Isar.autoIncrement
+    ..title = (json['title'] as String?) ?? '无标题'
+    ..content = (json['content'] as String?) ?? ''
+    ..createdAt = DateTime.parse(json['createdAt'] as String)
+    ..updatedAt = DateTime.parse(json['updatedAt'] as String)
+    ..isPinned = (json['isPinned'] as bool?) ?? false
+    ..isDeleted = (json['isDeleted'] as bool?) ?? false
+    ..deletedAt = json['deletedAt'] != null
+        ? DateTime.parse(json['deletedAt'] as String)
+        : null;
 }
 
 /// 标签
@@ -155,11 +168,20 @@ class Tag {
     return tagColors[(hash.abs()) % tagColors.length];
   }
 
-  /// 转换为 JSON（用于调试）
+  /// 转换为 JSON（用于备份导出）
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
         'colorArgb': colorArgb,
         'createdAt': createdAt.toIso8601String(),
       };
+
+  /// 从 JSON 创建（用于备份恢复）
+  factory Tag.fromJson(Map<String, dynamic> json) => Tag()
+    ..id = (json['id'] as int?) ?? Isar.autoIncrement
+    ..name = json['name'] as String
+    ..colorArgb = (json['colorArgb'] as int?) ?? 0xFF5C6BC0
+    ..createdAt = json['createdAt'] != null
+        ? DateTime.parse(json['createdAt'] as String)
+        : DateTime.now();
 }

@@ -11,6 +11,13 @@
     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO"/>
     <uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/>
     
+    <!-- Android 13+ 通知权限（提醒必需） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Android 12+ 精确提醒（"闹钟和提醒"特殊权限，未授予时降级为不精确提醒） -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <!-- 重启后恢复已排定的提醒（flutter_local_notifications 的 boot receiver） -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+
     <application
         android:requestLegacyExternalStorage="true"
         android:label="待办事项"

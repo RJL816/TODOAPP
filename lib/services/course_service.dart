@@ -1,5 +1,6 @@
 import 'package:isar/isar.dart';
 import '../models/course.dart';
+import '../models/class_time_config.dart';
 import 'widget_service.dart';
 
 /// 课程数据库服务
@@ -26,33 +27,141 @@ class CourseService {
     return _isar!;
   }
 
+  // ==================== 节次时间配置 ====================
+
+  /// 默认节次时间（与旧版硬编码保持一致，首次使用时写入）
+  static List<ClassTimeConfig> defaultTimeConfigs() => [
+        ClassTimeConfig.create(id: 1, firstPeriod: 1, lastPeriod: 2, startMinutes: 8 * 60, endMinutes: 9 * 60 + 40),
+        ClassTimeConfig.create(id: 2, firstPeriod: 3, lastPeriod: 4, startMinutes: 10 * 60, endMinutes: 11 * 60 + 40),
+        ClassTimeConfig.create(id: 3, firstPeriod: 5, lastPeriod: 6, startMinutes: 14 * 60 + 30, endMinutes: 16 * 60 + 10),
+        ClassTimeConfig.create(id: 4, firstPeriod: 7, lastPeriod: 8, startMinutes: 16 * 60 + 30, endMinutes: 18 * 60 + 10),
+        ClassTimeConfig.create(id: 5, firstPeriod: 9, lastPeriod: 10, startMinutes: 19 * 60 + 30, endMinutes: 21 * 60 + 10),
+      ];
+
+  /// 获取节次时间配置（首次使用时写入默认值），按节次序号排序
+  Future<List<ClassTimeConfig>> getTimeConfigs() async {
+    var configs = await isar.classTimeConfigs.where().findAll();
+    if (configs.isEmpty) {
+      configs = defaultTimeConfigs();
+      await isar.writeTxn(() async {
+        await isar.classTimeConfigs.putAll(configs);
+      });
+    }
+    configs.sort((a, b) => a.id.compareTo(b.id));
+    return configs;
+  }
+
+  /// 整体保存节次时间配置（id 会被重排为 1..n）
+  Future<void> saveTimeConfigs(List<ClassTimeConfig> configs) async {
+    for (int i = 0; i < configs.length; i++) {
+      configs[i].id = i + 1;
+    }
+    await isar.writeTxn(() async {
+      await isar.classTimeConfigs.clear();
+      await isar.classTimeConfigs.putAll(configs);
+    });
+  }
+
+  /// 判断某时刻处于哪个大节（纯函数，供测试与提醒计算复用）
+  static ClassTimeConfig? currentSection(
+      List<ClassTimeConfig> configs, int nowMinutes) {
+    for (final c in configs) {
+      if (nowMinutes >= c.startMinutes && nowMinutes <= c.endMinutes) {
+        return c;
+      }
+    }
+    return null;
+  }
+
+  /// 根据 [time]（默认现在）计算其所处大节的起始节次；不在上课时间返回 0
+  static int currentPeriodOf(List<ClassTimeConfig> configs, DateTime time) {
+    final nowMinutes = time.hour * 60 + time.minute;
+    return currentSection(configs, nowMinutes)?.firstPeriod ?? 0;
+  }
+
   // ==================== 学期配置管理 ====================
 
-  /// 获取或创建当前学期配置
-  Future<SemesterConfig> getOrCreateCurrentSemester() async {
+  /// 确保恰好有一个活跃学期并返回它。
+  /// 兼容旧数据：没有任何 isActive 标记时，激活第一个（没有则创建默认）。
+  Future<SemesterConfig> ensureActiveSemester() async {
     final configs = await isar.semesterConfigs.where().findAll();
 
     if (configs.isEmpty) {
-      // 没有配置，创建默认配置
       final now = DateTime.now();
-      // 找到本周的周一作为开学日期
-      final monday = _findMonday(now);
-
       final config = SemesterConfig.create(
         name: _generateDefaultSemesterName(now),
-        startDate: monday,
+        startDate: _findMonday(now),
         totalWeeks: 20,
+        isActive: true,
       );
-
       await isar.writeTxn(() async {
         await isar.semesterConfigs.put(config);
       });
-
       return config;
     }
 
-    // 返回第一个配置
-    return configs.first;
+    final active =
+        configs.where((c) => c.isActive).toList()..sort((a, b) => a.id.compareTo(b.id));
+
+    if (active.isNotEmpty) {
+      // 多个活跃时只保留第一个（防御性处理）
+      if (active.length > 1) {
+        await isar.writeTxn(() async {
+          for (int i = 1; i < active.length; i++) {
+            active[i].isActive = false;
+            await isar.semesterConfigs.put(active[i]);
+          }
+        });
+      }
+      return active.first;
+    }
+
+    // 旧数据迁移：没有任何标记 → 激活第一个
+    final first = configs.first;
+    first.isActive = true;
+    await isar.writeTxn(() async {
+      await isar.semesterConfigs.put(first);
+    });
+    return first;
+  }
+
+  /// 获取所有学期（按名称排序）
+  Future<List<SemesterConfig>> getAllSemesters() async {
+    final configs = await isar.semesterConfigs.where().findAll();
+    configs.sort((a, b) => a.name.compareTo(b.name));
+    return configs;
+  }
+
+  /// 切换活跃学期
+  Future<SemesterConfig> setActiveSemester(SemesterConfig target) async {
+    final configs = await isar.semesterConfigs.where().findAll();
+    await isar.writeTxn(() async {
+      for (final c in configs) {
+        final shouldActive = c.id == target.id;
+        if (c.isActive != shouldActive) {
+          c.isActive = shouldActive;
+          await isar.semesterConfigs.put(c);
+        }
+      }
+    });
+    return target;
+  }
+
+  /// 新建学期并设为活跃
+  Future<SemesterConfig> createSemester(SemesterConfig config) async {
+    config.isActive = true;
+    await isar.writeTxn(() async {
+      // 取消其他学期的活跃标记
+      final others = await isar.semesterConfigs.where().findAll();
+      for (final c in others) {
+        if (c.isActive && c.id != config.id) {
+          c.isActive = false;
+          await isar.semesterConfigs.put(c);
+        }
+      }
+      await isar.semesterConfigs.put(config);
+    });
+    return config;
   }
 
   /// 更新学期配置
@@ -62,10 +171,13 @@ class CourseService {
     });
   }
 
-  /// 获取当前学期
-  Future<SemesterConfig?> getCurrentSemester() async {
-    final configs = await isar.semesterConfigs.where().findFirst();
-    return configs;
+  /// 判断两门课程是否重复（同名 + 同星期 + 节次区间重叠）。
+  /// 纯函数，供导入预览与测试使用。
+  static bool isDuplicateCourse(Course a, Course b) {
+    return a.name == b.name &&
+        a.weekday == b.weekday &&
+        a.startPeriod <= b.endPeriod &&
+        b.startPeriod <= a.endPeriod;
   }
 
   /// 找到指定日期所在周的周一
@@ -94,7 +206,7 @@ class CourseService {
 
   // ==================== 课程CRUD操作 ====================
 
-  /// 导入课程（清除旧数据）
+  /// 导入课程到指定学期（清除该学期旧数据）
   Future<void> importCourses(List<Course> courses, String semester) async {
     await isar.writeTxn(() async {
       // 删除该学期的旧课程
@@ -136,18 +248,22 @@ class CourseService {
     });
   }
 
-  /// 获取所有课程
-  Future<List<Course>> getAllCourses() async {
-    return await isar.courses.where().findAll();
+  /// 获取活跃学期的所有课程
+  Future<List<Course>> getAllCourses({String? semester}) async {
+    final name = semester ?? (await ensureActiveSemester()).name;
+    return await isar.courses.filter().semesterEqualTo(name).findAll();
   }
 
-  // ==================== 课程查询 ====================
+  // ==================== 课程查询（全部按活跃学期过滤） ====================
 
   /// 获取指定周的课程表
   /// @param weekNum 周次数（1-20）
   /// @return Map<星期几, 课程列表>，key为1-7
-  Future<Map<int, List<Course>>> getWeeklySchedule(int weekNum) async {
-    final allCourses = await isar.courses.where().findAll();
+  Future<Map<int, List<Course>>> getWeeklySchedule(int weekNum,
+      {String? semester}) async {
+    final name = semester ?? (await ensureActiveSemester()).name;
+    final allCourses =
+        await isar.courses.filter().semesterEqualTo(name).findAll();
 
     // 筛选指定周有课的课程（过滤掉已结课的课程）
     final weekCourses = allCourses.where((course) {
@@ -175,8 +291,10 @@ class CourseService {
   /// 获取指定周的课程列表
   /// @param weekNum 周次数
   /// @return 该周的所有课程，已按星期和节次排序
-  Future<List<Course>> getCoursesForWeek(int weekNum) async {
-    final allCourses = await isar.courses.where().findAll();
+  Future<List<Course>> getCoursesForWeek(int weekNum, {String? semester}) async {
+    final name = semester ?? (await ensureActiveSemester()).name;
+    final allCourses =
+        await isar.courses.filter().semesterEqualTo(name).findAll();
 
     return allCourses.where((course) {
       return course.hasClassInWeek(weekNum);
@@ -194,8 +312,11 @@ class CourseService {
   /// @param weekday 星期几（1-7）
   /// @param weekNum 周次数
   /// @return 该天的课程列表，按节次排序
-  Future<List<Course>> getCoursesForDay(int weekday, int weekNum) async {
-    final allCourses = await isar.courses.where().findAll();
+  Future<List<Course>> getCoursesForDay(int weekday, int weekNum,
+      {String? semester}) async {
+    final name = semester ?? (await ensureActiveSemester()).name;
+    final allCourses =
+        await isar.courses.filter().semesterEqualTo(name).findAll();
 
     return allCourses.where((course) {
       return course.weekday == weekday && course.hasClassInWeek(weekNum);
@@ -208,14 +329,12 @@ class CourseService {
   Future<Course?> getCurrentCourse() async {
     final now = DateTime.now();
     final weekday = now.weekday; // 1=周一, 7=周日
-    final hour = now.hour;
-    final minute = now.minute;
 
-    // 计算当前是第几节
-    int currentPeriod = _getCurrentPeriod(hour, minute);
+    final configs = await getTimeConfigs();
+    final currentPeriod = currentPeriodOf(configs, now);
     if (currentPeriod == 0) return null;
 
-    final semester = await getOrCreateCurrentSemester();
+    final semester = await ensureActiveSemester();
     final currentWeek = semester.getCurrentWeek();
 
     final todayCourses = await getCoursesForDay(weekday, currentWeek);
@@ -234,11 +353,10 @@ class CourseService {
   Future<Course?> getNextCourse() async {
     final now = DateTime.now();
     final weekday = now.weekday;
-    final hour = now.hour;
-    final minute = now.minute;
 
-    final currentPeriod = _getCurrentPeriod(hour, minute);
-    final semester = await getOrCreateCurrentSemester();
+    final configs = await getTimeConfigs();
+    final currentPeriod = currentPeriodOf(configs, now);
+    final semester = await ensureActiveSemester();
     final currentWeek = semester.getCurrentWeek();
 
     // 先看今天还有没有课
@@ -259,32 +377,6 @@ class CourseService {
     }
 
     return null;
-  }
-
-  /// 根据当前时间计算当前是第几节
-  /// @param hour 小时（0-23）
-  /// @param minute 分钟（0-59）
-  /// @return 节次（1-10），如果不在上课时间返回0
-  int _getCurrentPeriod(int hour, int minute) {
-    final totalMinutes = hour * 60 + minute;
-
-    // 时间段定义（分钟）
-    final periods = [
-      {'start': 8 * 60, 'end': 9 * 60 + 40},      // 08:00-09:40 第1-2节
-      {'start': 10 * 60, 'end': 11 * 60 + 40},   // 10:00-11:40 第3-4节
-      {'start': 14 * 60 + 30, 'end': 16 * 60 + 10}, // 14:30-16:10 第5-6节
-      {'start': 16 * 60 + 30, 'end': 18 * 60 + 10}, // 16:30-18:10 第7-8节
-      {'start': 19 * 60 + 30, 'end': 21 * 60 + 10}, // 19:30-21:10 第9-10节
-    ];
-
-    for (int i = 0; i < periods.length; i++) {
-      final period = periods[i];
-      if (totalMinutes >= period['start']! && totalMinutes <= period['end']!) {
-        return i * 2 + 1; // 返回该时间段的开始节次
-      }
-    }
-
-    return 0;
   }
 
   // ==================== 统计功能 ====================

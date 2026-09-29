@@ -38,29 +38,54 @@ const TodoItemSchema = CollectionSchema(
       name: r'createdDate',
       type: IsarType.dateTime,
     ),
-    r'isCompleted': PropertySchema(
+    r'deadline': PropertySchema(
       id: 4,
+      name: r'deadline',
+      type: IsarType.dateTime,
+    ),
+    r'habitRemindMinutes': PropertySchema(
+      id: 5,
+      name: r'habitRemindMinutes',
+      type: IsarType.long,
+    ),
+    r'isCompleted': PropertySchema(
+      id: 6,
       name: r'isCompleted',
       type: IsarType.bool,
     ),
+    r'isReminderEnabled': PropertySchema(
+      id: 7,
+      name: r'isReminderEnabled',
+      type: IsarType.bool,
+    ),
     r'notes': PropertySchema(
-      id: 5,
+      id: 8,
       name: r'notes',
       type: IsarType.string,
     ),
+    r'remindBeforeMinutes': PropertySchema(
+      id: 9,
+      name: r'remindBeforeMinutes',
+      type: IsarType.long,
+    ),
     r'sortOrder': PropertySchema(
-      id: 6,
+      id: 10,
       name: r'sortOrder',
       type: IsarType.long,
     ),
+    r'startTime': PropertySchema(
+      id: 11,
+      name: r'startTime',
+      type: IsarType.dateTime,
+    ),
     r'taskType': PropertySchema(
-      id: 7,
+      id: 12,
       name: r'taskType',
       type: IsarType.string,
       enumMap: _TodoItemtaskTypeEnumValueMap,
     ),
     r'title': PropertySchema(
-      id: 8,
+      id: 13,
       name: r'title',
       type: IsarType.string,
     )
@@ -134,11 +159,16 @@ void _todoItemSerialize(
   writer.writeDateTime(offsets[1], object.completedAt);
   writer.writeLong(offsets[2], object.createdAt);
   writer.writeDateTime(offsets[3], object.createdDate);
-  writer.writeBool(offsets[4], object.isCompleted);
-  writer.writeString(offsets[5], object.notes);
-  writer.writeLong(offsets[6], object.sortOrder);
-  writer.writeString(offsets[7], object.taskType.name);
-  writer.writeString(offsets[8], object.title);
+  writer.writeDateTime(offsets[4], object.deadline);
+  writer.writeLong(offsets[5], object.habitRemindMinutes);
+  writer.writeBool(offsets[6], object.isCompleted);
+  writer.writeBool(offsets[7], object.isReminderEnabled);
+  writer.writeString(offsets[8], object.notes);
+  writer.writeLong(offsets[9], object.remindBeforeMinutes);
+  writer.writeLong(offsets[10], object.sortOrder);
+  writer.writeDateTime(offsets[11], object.startTime);
+  writer.writeString(offsets[12], object.taskType.name);
+  writer.writeString(offsets[13], object.title);
 }
 
 TodoItem _todoItemDeserialize(
@@ -154,14 +184,19 @@ TodoItem _todoItemDeserialize(
   object.completedAt = reader.readDateTimeOrNull(offsets[1]);
   object.createdAt = reader.readLong(offsets[2]);
   object.createdDate = reader.readDateTime(offsets[3]);
+  object.deadline = reader.readDateTimeOrNull(offsets[4]);
+  object.habitRemindMinutes = reader.readLongOrNull(offsets[5]);
   object.id = id;
-  object.isCompleted = reader.readBool(offsets[4]);
-  object.notes = reader.readStringOrNull(offsets[5]);
-  object.sortOrder = reader.readLong(offsets[6]);
+  object.isCompleted = reader.readBool(offsets[6]);
+  object.isReminderEnabled = reader.readBool(offsets[7]);
+  object.notes = reader.readStringOrNull(offsets[8]);
+  object.remindBeforeMinutes = reader.readLong(offsets[9]);
+  object.sortOrder = reader.readLong(offsets[10]);
+  object.startTime = reader.readDateTimeOrNull(offsets[11]);
   object.taskType =
-      _TodoItemtaskTypeValueEnumMap[reader.readStringOrNull(offsets[7])] ??
+      _TodoItemtaskTypeValueEnumMap[reader.readStringOrNull(offsets[12])] ??
           TaskType.oneTime;
-  object.title = reader.readString(offsets[8]);
+  object.title = reader.readString(offsets[13]);
   return object;
 }
 
@@ -182,15 +217,25 @@ P _todoItemDeserializeProp<P>(
     case 3:
       return (reader.readDateTime(offset)) as P;
     case 4:
-      return (reader.readBool(offset)) as P;
+      return (reader.readDateTimeOrNull(offset)) as P;
     case 5:
-      return (reader.readStringOrNull(offset)) as P;
+      return (reader.readLongOrNull(offset)) as P;
     case 6:
-      return (reader.readLong(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 7:
+      return (reader.readBool(offset)) as P;
+    case 8:
+      return (reader.readStringOrNull(offset)) as P;
+    case 9:
+      return (reader.readLong(offset)) as P;
+    case 10:
+      return (reader.readLong(offset)) as P;
+    case 11:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 12:
       return (_TodoItemtaskTypeValueEnumMap[reader.readStringOrNull(offset)] ??
           TaskType.oneTime) as P;
-    case 8:
+    case 13:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -758,6 +803,149 @@ extension TodoItemQueryFilter
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> deadlineIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'deadline',
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> deadlineIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'deadline',
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> deadlineEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'deadline',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> deadlineGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'deadline',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> deadlineLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'deadline',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> deadlineBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'deadline',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      habitRemindMinutesIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'habitRemindMinutes',
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      habitRemindMinutesIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'habitRemindMinutes',
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      habitRemindMinutesEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'habitRemindMinutes',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      habitRemindMinutesGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'habitRemindMinutes',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      habitRemindMinutesLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'habitRemindMinutes',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      habitRemindMinutesBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'habitRemindMinutes',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> idEqualTo(Id value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -815,6 +1003,16 @@ extension TodoItemQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
         property: r'isCompleted',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      isReminderEnabledEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isReminderEnabled',
         value: value,
       ));
     });
@@ -966,6 +1164,62 @@ extension TodoItemQueryFilter
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      remindBeforeMinutesEqualTo(int value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'remindBeforeMinutes',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      remindBeforeMinutesGreaterThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'remindBeforeMinutes',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      remindBeforeMinutesLessThan(
+    int value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'remindBeforeMinutes',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition>
+      remindBeforeMinutesBetween(
+    int lower,
+    int upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'remindBeforeMinutes',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> sortOrderEqualTo(
       int value) {
     return QueryBuilder.apply(this, (query) {
@@ -1011,6 +1265,75 @@ extension TodoItemQueryFilter
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.between(
         property: r'sortOrder',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> startTimeIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'startTime',
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> startTimeIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'startTime',
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> startTimeEqualTo(
+      DateTime? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'startTime',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> startTimeGreaterThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'startTime',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> startTimeLessThan(
+    DateTime? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'startTime',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterFilterCondition> startTimeBetween(
+    DateTime? lower,
+    DateTime? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'startTime',
         lower: lower,
         includeLower: includeLower,
         upper: upper,
@@ -1335,6 +1658,31 @@ extension TodoItemQuerySortBy on QueryBuilder<TodoItem, TodoItem, QSortBy> {
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByDeadline() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'deadline', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByDeadlineDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'deadline', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByHabitRemindMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'habitRemindMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy>
+      sortByHabitRemindMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'habitRemindMinutes', Sort.desc);
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByIsCompleted() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isCompleted', Sort.asc);
@@ -1344,6 +1692,18 @@ extension TodoItemQuerySortBy on QueryBuilder<TodoItem, TodoItem, QSortBy> {
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByIsCompletedDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'isCompleted', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByIsReminderEnabled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isReminderEnabled', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByIsReminderEnabledDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isReminderEnabled', Sort.desc);
     });
   }
 
@@ -1359,6 +1719,19 @@ extension TodoItemQuerySortBy on QueryBuilder<TodoItem, TodoItem, QSortBy> {
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByRemindBeforeMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remindBeforeMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy>
+      sortByRemindBeforeMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remindBeforeMinutes', Sort.desc);
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortBySortOrder() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sortOrder', Sort.asc);
@@ -1368,6 +1741,18 @@ extension TodoItemQuerySortBy on QueryBuilder<TodoItem, TodoItem, QSortBy> {
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortBySortOrderDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByStartTime() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'startTime', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> sortByStartTimeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'startTime', Sort.desc);
     });
   }
 
@@ -1446,6 +1831,31 @@ extension TodoItemQuerySortThenBy
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByDeadline() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'deadline', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByDeadlineDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'deadline', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByHabitRemindMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'habitRemindMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy>
+      thenByHabitRemindMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'habitRemindMinutes', Sort.desc);
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenById() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'id', Sort.asc);
@@ -1470,6 +1880,18 @@ extension TodoItemQuerySortThenBy
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByIsReminderEnabled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isReminderEnabled', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByIsReminderEnabledDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isReminderEnabled', Sort.desc);
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByNotes() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'notes', Sort.asc);
@@ -1482,6 +1904,19 @@ extension TodoItemQuerySortThenBy
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByRemindBeforeMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remindBeforeMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy>
+      thenByRemindBeforeMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'remindBeforeMinutes', Sort.desc);
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenBySortOrder() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sortOrder', Sort.asc);
@@ -1491,6 +1926,18 @@ extension TodoItemQuerySortThenBy
   QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenBySortOrderDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'sortOrder', Sort.desc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByStartTime() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'startTime', Sort.asc);
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QAfterSortBy> thenByStartTimeDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'startTime', Sort.desc);
     });
   }
 
@@ -1546,9 +1993,27 @@ extension TodoItemQueryWhereDistinct
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QDistinct> distinctByDeadline() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'deadline');
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QDistinct> distinctByHabitRemindMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'habitRemindMinutes');
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QDistinct> distinctByIsCompleted() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'isCompleted');
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QDistinct> distinctByIsReminderEnabled() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isReminderEnabled');
     });
   }
 
@@ -1559,9 +2024,21 @@ extension TodoItemQueryWhereDistinct
     });
   }
 
+  QueryBuilder<TodoItem, TodoItem, QDistinct> distinctByRemindBeforeMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'remindBeforeMinutes');
+    });
+  }
+
   QueryBuilder<TodoItem, TodoItem, QDistinct> distinctBySortOrder() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'sortOrder');
+    });
+  }
+
+  QueryBuilder<TodoItem, TodoItem, QDistinct> distinctByStartTime() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'startTime');
     });
   }
 
@@ -1612,9 +2089,27 @@ extension TodoItemQueryProperty
     });
   }
 
+  QueryBuilder<TodoItem, DateTime?, QQueryOperations> deadlineProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'deadline');
+    });
+  }
+
+  QueryBuilder<TodoItem, int?, QQueryOperations> habitRemindMinutesProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'habitRemindMinutes');
+    });
+  }
+
   QueryBuilder<TodoItem, bool, QQueryOperations> isCompletedProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'isCompleted');
+    });
+  }
+
+  QueryBuilder<TodoItem, bool, QQueryOperations> isReminderEnabledProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isReminderEnabled');
     });
   }
 
@@ -1624,9 +2119,21 @@ extension TodoItemQueryProperty
     });
   }
 
+  QueryBuilder<TodoItem, int, QQueryOperations> remindBeforeMinutesProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'remindBeforeMinutes');
+    });
+  }
+
   QueryBuilder<TodoItem, int, QQueryOperations> sortOrderProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'sortOrder');
+    });
+  }
+
+  QueryBuilder<TodoItem, DateTime?, QQueryOperations> startTimeProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'startTime');
     });
   }
 

@@ -17,18 +17,23 @@ const SemesterConfigSchema = CollectionSchema(
   name: r'SemesterConfig',
   id: 8034574050029237484,
   properties: {
-    r'name': PropertySchema(
+    r'isActive': PropertySchema(
       id: 0,
+      name: r'isActive',
+      type: IsarType.bool,
+    ),
+    r'name': PropertySchema(
+      id: 1,
       name: r'name',
       type: IsarType.string,
     ),
     r'startDate': PropertySchema(
-      id: 1,
+      id: 2,
       name: r'startDate',
       type: IsarType.dateTime,
     ),
     r'totalWeeks': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'totalWeeks',
       type: IsarType.long,
     )
@@ -90,9 +95,10 @@ void _semesterConfigSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeString(offsets[0], object.name);
-  writer.writeDateTime(offsets[1], object.startDate);
-  writer.writeLong(offsets[2], object.totalWeeks);
+  writer.writeBool(offsets[0], object.isActive);
+  writer.writeString(offsets[1], object.name);
+  writer.writeDateTime(offsets[2], object.startDate);
+  writer.writeLong(offsets[3], object.totalWeeks);
 }
 
 SemesterConfig _semesterConfigDeserialize(
@@ -103,9 +109,10 @@ SemesterConfig _semesterConfigDeserialize(
 ) {
   final object = SemesterConfig();
   object.id = id;
-  object.name = reader.readString(offsets[0]);
-  object.startDate = reader.readDateTime(offsets[1]);
-  object.totalWeeks = reader.readLong(offsets[2]);
+  object.isActive = reader.readBool(offsets[0]);
+  object.name = reader.readString(offsets[1]);
+  object.startDate = reader.readDateTime(offsets[2]);
+  object.totalWeeks = reader.readLong(offsets[3]);
   return object;
 }
 
@@ -117,10 +124,12 @@ P _semesterConfigDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readString(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 1:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readString(offset)) as P;
     case 2:
+      return (reader.readDateTime(offset)) as P;
+    case 3:
       return (reader.readLong(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -425,6 +434,16 @@ extension SemesterConfigQueryFilter
   }
 
   QueryBuilder<SemesterConfig, SemesterConfig, QAfterFilterCondition>
+      isActiveEqualTo(bool value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'isActive',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<SemesterConfig, SemesterConfig, QAfterFilterCondition>
       nameEqualTo(
     String value, {
     bool caseSensitive = true,
@@ -681,6 +700,19 @@ extension SemesterConfigQueryLinks
 
 extension SemesterConfigQuerySortBy
     on QueryBuilder<SemesterConfig, SemesterConfig, QSortBy> {
+  QueryBuilder<SemesterConfig, SemesterConfig, QAfterSortBy> sortByIsActive() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isActive', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SemesterConfig, SemesterConfig, QAfterSortBy>
+      sortByIsActiveDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isActive', Sort.desc);
+    });
+  }
+
   QueryBuilder<SemesterConfig, SemesterConfig, QAfterSortBy> sortByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -735,6 +767,19 @@ extension SemesterConfigQuerySortThenBy
     });
   }
 
+  QueryBuilder<SemesterConfig, SemesterConfig, QAfterSortBy> thenByIsActive() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isActive', Sort.asc);
+    });
+  }
+
+  QueryBuilder<SemesterConfig, SemesterConfig, QAfterSortBy>
+      thenByIsActiveDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'isActive', Sort.desc);
+    });
+  }
+
   QueryBuilder<SemesterConfig, SemesterConfig, QAfterSortBy> thenByName() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'name', Sort.asc);
@@ -777,6 +822,12 @@ extension SemesterConfigQuerySortThenBy
 
 extension SemesterConfigQueryWhereDistinct
     on QueryBuilder<SemesterConfig, SemesterConfig, QDistinct> {
+  QueryBuilder<SemesterConfig, SemesterConfig, QDistinct> distinctByIsActive() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'isActive');
+    });
+  }
+
   QueryBuilder<SemesterConfig, SemesterConfig, QDistinct> distinctByName(
       {bool caseSensitive = true}) {
     return QueryBuilder.apply(this, (query) {
@@ -804,6 +855,12 @@ extension SemesterConfigQueryProperty
   QueryBuilder<SemesterConfig, int, QQueryOperations> idProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'id');
+    });
+  }
+
+  QueryBuilder<SemesterConfig, bool, QQueryOperations> isActiveProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'isActive');
     });
   }
 

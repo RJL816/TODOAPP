@@ -18,6 +18,9 @@ class SemesterConfig {
   /// 总周数
   late int totalWeeks;
 
+  /// 是否为当前活跃学期（课表查询与导入都以它过滤）
+  late bool isActive;
+
   SemesterConfig();
 
   /// 创建新学期配置
@@ -25,24 +28,22 @@ class SemesterConfig {
     required this.name,
     required this.startDate,
     this.totalWeeks = 20,
+    this.isActive = false,
   });
+
+  /// 计算指定日期是第几周（纯函数，供测试与提醒计算复用）
+  /// 返回值：1-totalWeeks，如果超出范围则收敛到最接近的值
+  int getWeekOf(DateTime date) {
+    final daysDiff = date.difference(startDate).inDays;
+    int week = (daysDiff / 7).floor() + 1;
+    if (week < 1) week = 1;
+    if (week > totalWeeks) week = totalWeeks;
+    return week;
+  }
 
   /// 计算当前是第几周
   /// 返回值：1-totalWeeks，如果超出范围则返回最接近的值
-  int getCurrentWeek() {
-    final now = DateTime.now();
-    // 计算从开学日期到现在的天数差
-    final daysDiff = now.difference(startDate).inDays;
-
-    // 向下取整得到周次，+1因为第一周从0天开始
-    int week = (daysDiff / 7).floor() + 1;
-
-    // 确保在有效范围内
-    if (week < 1) week = 1;
-    if (week > totalWeeks) week = totalWeeks;
-
-    return week;
-  }
+  int getCurrentWeek() => getWeekOf(DateTime.now());
 
   /// 检查当前日期是否在学期内
   bool isInSemester() {
@@ -56,6 +57,23 @@ class SemesterConfig {
   DateTime getEndDate() {
     return startDate.add(Duration(days: totalWeeks * 7 - 1));
   }
+
+  /// 转换为 JSON（用于备份导出）
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'startDate': startDate.toIso8601String(),
+        'totalWeeks': totalWeeks,
+        'isActive': isActive,
+      };
+
+  /// 从 JSON 创建（用于备份恢复）
+  factory SemesterConfig.fromJson(Map<String, dynamic> json) => SemesterConfig()
+    ..id = (json['id'] as int?) ?? Isar.autoIncrement
+    ..name = json['name'] as String
+    ..startDate = DateTime.parse(json['startDate'] as String)
+    ..totalWeeks = (json['totalWeeks'] as int?) ?? 20
+    ..isActive = (json['isActive'] as bool?) ?? false;
 }
 
 /// 课程信息
@@ -229,7 +247,7 @@ class Course {
     return Course.parseWeekRange(range);
   }
 
-  /// 转换为JSON（用于调试）
+  /// 转换为JSON（用于备份导出）
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -243,6 +261,20 @@ class Course {
         'colorArgb': colorArgb,
         'notes': notes,
       };
+
+  /// 从 JSON 创建（用于备份恢复）
+  factory Course.fromJson(Map<String, dynamic> json) => Course()
+    ..id = (json['id'] as int?) ?? Isar.autoIncrement
+    ..name = json['name'] as String
+    ..teacher = (json['teacher'] as String?) ?? ''
+    ..location = (json['location'] as String?) ?? ''
+    ..weekday = json['weekday'] as int
+    ..startPeriod = json['startPeriod'] as int
+    ..endPeriod = json['endPeriod'] as int
+    ..weekRange = (json['weekRange'] as String?) ?? '1-18'
+    ..semester = (json['semester'] as String?) ?? '2025-2026-1'
+    ..colorArgb = (json['colorArgb'] as int?) ?? 0xFF5C6BC0
+    ..notes = json['notes'] as String?;
 }
 
 /// 考试信息
@@ -344,7 +376,7 @@ class Exam {
     return '${examDateTime.month}月${examDateTime.day}日';
   }
 
-  /// 转换为JSON（用于调试）
+  /// 转换为JSON（用于备份导出）
   Map<String, dynamic> toJson() => {
         'id': id,
         'name': name,
@@ -356,4 +388,16 @@ class Exam {
         'colorArgb': colorArgb,
         'isCompleted': isCompleted,
       };
+
+  /// 从 JSON 创建（用于备份恢复）
+  factory Exam.fromJson(Map<String, dynamic> json) => Exam()
+    ..id = (json['id'] as int?) ?? Isar.autoIncrement
+    ..name = json['name'] as String
+    ..examDateTime = DateTime.parse(json['examDateTime'] as String)
+    ..durationMinutes = (json['durationMinutes'] as int?) ?? 120
+    ..location = (json['location'] as String?) ?? ''
+    ..semester = (json['semester'] as String?) ?? '2025-2026-1'
+    ..notes = json['notes'] as String?
+    ..colorArgb = (json['colorArgb'] as int?) ?? 0xFFE91E63
+    ..isCompleted = (json['isCompleted'] as bool?) ?? false;
 }

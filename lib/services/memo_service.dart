@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import '../models/memo.dart';
 
@@ -330,6 +331,22 @@ class MemoService {
   }
 
   // ==================== 回收站清理 ====================
+
+  static bool _trashCleanedThisSession = false;
+
+  /// 每次应用会话执行一次回收站清理（删除超过 30 天的已删除备忘录）
+  Future<void> cleanupTrashOnce() async {
+    if (_trashCleanedThisSession) return;
+    _trashCleanedThisSession = true;
+    try {
+      final count = await cleanupOldDeletedMemos();
+      if (count > 0) {
+        debugPrint('回收站清理：永久删除 $count 条超过 30 天的备忘录');
+      }
+    } catch (e) {
+      debugPrint('回收站清理失败: $e');
+    }
+  }
 
   /// 清理超过30天的已删除备忘录
   Future<int> cleanupOldDeletedMemos() async {

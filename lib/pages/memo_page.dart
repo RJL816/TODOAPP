@@ -1,7 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/memo_service.dart';
 import '../models/memo.dart';
+import '../ui/app_theme.dart';
+import '../ui/glass_panel.dart';
+import '../ui/live_markdown_editor.dart';
 
 /// 备忘录页面
 class MemoPage extends StatefulWidget {
@@ -19,7 +25,7 @@ class _MemoPageState extends State<MemoPage> {
   Tag? _selectedTag;
   bool _isLoading = true;
   bool _isTrashMode = false;
-  bool _isPreviewMode = false; // 预览模式
+  bool _isSourceMode = false; // 整篇源码模式；默认逐段实时预览
 
   // 搜索控制器
   final TextEditingController _searchController = TextEditingController();
@@ -28,28 +34,83 @@ class _MemoPageState extends State<MemoPage> {
   // 当前选中的备忘录
   Memo? _selectedMemo;
 
+  // 窄屏（手机）单栏模式：true 时显示编辑器，false 显示列表
+  bool _showEditorPane = false;
+
+  // 宽屏分栏：侧栏宽度可拖拽调整并记忆；可整体收起让编辑器占满全宽
+  static const String _kSidebarWidthKey = 'memo_sidebar_width';
+  static const String _kSidebarCollapsedKey = 'memo_sidebar_collapsed';
+  double _sidebarWidth = 320;
+  bool _sidebarCollapsed = false;
+
   // 编辑控制器
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
+  final FocusNode _contentFocus = FocusNode();
+  bool _editorFocused = false;
+
+  // 保存状态反馈与防抖
+  Timer? _saveDebounce;
+  String? _saveStatus;
+
+  // 搜索防抖
+  Timer? _searchDebounce;
 
   @override
   void initState() {
     super.initState();
-    _initService();
     _loadData();
     _searchController.addListener(_onSearchChanged);
+    _loadSidebarPrefs();
+    _contentFocus.addListener(() {
+      if (mounted) setState(() => _editorFocused = _contentFocus.hasFocus);
+    });
+    // 回收站超过 30 天的清理，每次会话执行一次
+    MemoService.instance.cleanupTrashOnce();
   }
 
-  void _initService() {
-    final isar = MemoService.instance.isar;
-    _memoService.init(isar);
+  Future<void> _loadSidebarPrefs() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final w = prefs.getDouble(_kSidebarWidthKey);
+      final collapsed = prefs.getBool(_kSidebarCollapsedKey) ?? false;
+      if (mounted) {
+        setState(() {
+          if (w != null && w >= 260 && w <= 480) _sidebarWidth = w;
+          _sidebarCollapsed = collapsed;
+        });
+      }
+    } catch (_) {
+      // 读取失败使用默认值
+    }
+  }
+
+  Future<void> _saveSidebarWidth() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setDouble(_kSidebarWidthKey, _sidebarWidth);
+      await prefs.setBool(_kSidebarCollapsedKey, _sidebarCollapsed);
+    } catch (_) {
+      // 保存失败不影响使用
+    }
   }
 
   @override
   void dispose() {
+    if (_saveDebounce?.isActive == true && _selectedMemo != null) {
+      final memo = _selectedMemo!;
+      memo.title = _titleController.text.trim().isEmpty
+          ? '无标题'
+          : _titleController.text.trim();
+      memo.content = _contentController.text;
+      unawaited(_memoService.updateMemo(memo));
+    }
+    _saveDebounce?.cancel();
+    _searchDebounce?.cancel();
     _searchController.dispose();
     _titleController.dispose();
     _contentController.dispose();
+    _contentFocus.dispose();
     super.dispose();
   }
 
@@ -62,6 +123,7 @@ class _MemoPageState extends State<MemoPage> {
 
     final tags = await _memoService.getAllTags();
 
+    if (!mounted) return;
     setState(() {
       _memos = memos;
       _allTags = tags;
@@ -70,11 +132,23 @@ class _MemoPageState extends State<MemoPage> {
     });
 
     await _filterMemos();
+    if (mounted &&
+        !_isTrashMode &&
+        _selectedMemo == null &&
+        memos.isNotEmpty &&
+        MediaQuery.sizeOf(context).width >= 780) {
+      _selectMemo(memos.first);
+    }
   }
 
   void _onSearchChanged() {
-    setState(() => _searchKeyword = _searchController.text);
-    _filterMemos();
+    // 立即刷新输入框装饰（清空按钮），防抖后再执行过滤
+    setState(() {});
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      _searchKeyword = _searchController.text;
+      _filterMemos();
+    });
   }
 
   Future<void> _filterMemos() async {
@@ -94,8 +168,9 @@ class _MemoPageState extends State<MemoPage> {
   }
 
   Future<void> _createNewMemo() async {
+    await _flushPendingSave();
     final newMemo = Memo.create(
-      title: '新备忘录',
+      title: '',
       content: '',
     );
 
@@ -106,7 +181,9 @@ class _MemoPageState extends State<MemoPage> {
       _selectedMemo = newMemo;
       _titleController.text = newMemo.title;
       _contentController.text = newMemo.content;
-      _isPreviewMode = false; // 新建备忘录默认编辑模式
+      _isSourceMode = false;
+      _showEditorPane = true; // 窄屏单栏模式直接进入编辑页
+      _saveStatus = null;
     });
 
     await _loadData();
@@ -124,7 +201,19 @@ class _MemoPageState extends State<MemoPage> {
     await _loadData();
   }
 
+  Future<void> _flushPendingSave() async {
+    _saveDebounce?.cancel();
+    final memo = _selectedMemo;
+    if (memo == null) return;
+    final title = _titleController.text.trim().isEmpty
+        ? '无标题'
+        : _titleController.text.trim();
+    if (memo.title == title && memo.content == _contentController.text) return;
+    await _saveMemo();
+  }
+
   Future<void> _deleteMemo(int id) async {
+    if (_selectedMemo?.id == id) _saveDebounce?.cancel();
     if (_isTrashMode) {
       // 永久删除
       await _memoService.permanentDeleteMemo(id);
@@ -138,7 +227,8 @@ class _MemoPageState extends State<MemoPage> {
         _selectedMemo = null;
         _titleController.clear();
         _contentController.clear();
-        _isPreviewMode = false;
+        _isSourceMode = false;
+        _showEditorPane = false; // 删除的是正在编辑的备忘录，回到列表
       });
     }
 
@@ -185,14 +275,17 @@ class _MemoPageState extends State<MemoPage> {
     }
   }
 
-  void _toggleTrashMode() {
+  Future<void> _toggleTrashMode() async {
+    await _flushPendingSave();
+    if (!mounted) return;
     setState(() {
       _isTrashMode = !_isTrashMode;
       _selectedTag = null;
       _selectedMemo = null;
       _titleController.clear();
       _contentController.clear();
-      _isPreviewMode = false;
+      _isSourceMode = false;
+      _showEditorPane = false; // 回收站始终从列表看起
     });
     _loadData();
   }
@@ -231,129 +324,198 @@ class _MemoPageState extends State<MemoPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      color: theme.colorScheme.surface.withOpacity(0.5),
-      child: Row(
-        children: [
-          // 左侧列表（更窄，占约25%）
-          _buildSidebar(theme),
+    // 窄屏（手机）：单栏 master-detail，列表页与编辑页切换；
+    // 宽屏（桌面/横屏）：左右分栏，分隔条可拖拽调整宽度。
+    return LayoutBuilder(builder: (context, bounds) {
+      final availableWidth = bounds.maxWidth;
+      final isWide = availableWidth >= 780;
+      final maxSidebarWidth = (availableWidth - 420).clamp(260.0, 480.0);
 
-          // 右侧编辑器/预览（占约75%）
-          Expanded(
-            child: _selectedMemo == null
-                ? _buildEmptyState(theme)
-                : _buildEditor(theme),
+      if (!isWide) {
+        final showEditor = _selectedMemo != null && _showEditorPane;
+        return showEditor
+            ? _buildEditor(theme, isNarrow: true)
+            : _buildSidebar(theme, isNarrow: true);
+      }
+
+      // 满宽工作区：左侧贴导航、右侧直达窗口边界，只留上下少量呼吸空间
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(0, 10, 0, 12),
+        child: GlassPanel(
+          key: const Key('memo-workspace'),
+          level: GlassSurfaceLevel.solid,
+          radius: 0,
+          opacity: .78,
+          blur: 22,
+          shadow: false,
+          child: Row(
+            children: [
+              // 左侧列表（宽度可拖拽调整，可整体收起）
+              if (!_sidebarCollapsed) ...[
+                SizedBox(
+                  width: _sidebarWidth.clamp(260.0, maxSidebarWidth),
+                  child: _buildSidebar(theme, isNarrow: false),
+                ),
+                _buildDragHandle(theme, maxSidebarWidth),
+              ],
+
+              // 右侧编辑器/预览
+              Expanded(
+                child: _selectedMemo == null
+                    ? _buildEmptyState(theme)
+                    : _buildEditor(theme, isNarrow: false),
+              ),
+            ],
           ),
-        ],
+        ),
+      );
+    });
+  }
+
+  /// 宽屏分栏拖拽条：调整列表宽度并记忆
+  Widget _buildDragHandle(ThemeData theme, double maxSidebarWidth) {
+    return GestureDetector(
+      onHorizontalDragUpdate: (details) {
+        setState(() {
+          _sidebarWidth =
+              (_sidebarWidth + details.delta.dx).clamp(260.0, maxSidebarWidth);
+        });
+      },
+      onHorizontalDragEnd: (_) => _saveSidebarWidth(),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.resizeColumn,
+        child: Container(
+          width: 9,
+          color: Colors.transparent,
+          child: Center(
+              child: Container(
+            width: 1,
+            color: theme.colorScheme.onSurface.withValues(alpha: .12),
+          )),
+        ),
       ),
     );
   }
 
-  Widget _buildSidebar(ThemeData theme) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isNarrowScreen = screenWidth < 800;
-    // 侧边栏更窄：窄屏 220px，宽屏 280px
-    final sidebarWidth = isNarrowScreen ? 220.0 : 280.0;
+  Widget _buildSidebar(ThemeData theme, {required bool isNarrow}) {
+    final content = Column(
+      children: [
+        // 顶部工具栏
+        _buildSidebarHeader(theme),
 
-    return Container(
-      width: sidebarWidth,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          right: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.3),
-          ),
-        ),
-      ),
-      child: Column(
-        children: [
-          // 顶部工具栏
-          _buildSidebarHeader(theme),
-
-          // 搜索框
-          if (!_isTrashMode)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: TextField(
-                controller: _searchController,
-                decoration: InputDecoration(
-                  hintText: '搜索备忘录...',
-                  prefixIcon: const Icon(Icons.search),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide.none,
-                  ),
-                  filled: true,
-                  fillColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                ),
-              ),
-            ),
-
-          // 标签筛选
-          if (!_isTrashMode) _buildTagFilter(theme),
-
-          // 备忘录列表
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredMemos.isEmpty
-                    ? _buildEmptyListState(theme)
-                    : ListView.builder(
-                        padding: const EdgeInsets.all(8),
-                        itemCount: _filteredMemos.length,
-                        itemBuilder: (context, index) {
-                          final memo = _filteredMemos[index];
-                          final isSelected = _selectedMemo?.id == memo.id;
-
-                          return _MemoListItem(
-                            memo: memo,
-                            isSelected: isSelected,
-                            isTrashMode: _isTrashMode,
-                            onTap: () => _selectMemo(memo),
-                            onDelete: () => _deleteMemo(memo.id),
-                            onRestore: () => _restoreMemo(memo.id),
-                            onTogglePin: () => _togglePin(memo.id),
-                            onExport: () => _exportMemo(memo.id),
-                          );
+        // 搜索框
+        if (!_isTrashMode)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: '搜索备忘录...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        tooltip: '清空搜索',
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => _searchKeyword = '');
+                          _filterMemos();
                         },
-                      ),
+                      )
+                    : null,
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide.none,
+                ),
+                filled: true,
+                fillColor: theme.colorScheme.surfaceContainerHighest
+                    .withValues(alpha: 0.5),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+            ),
           ),
 
-          // 底部新建按钮（非回收站模式）
-          if (!_isTrashMode)
-            Padding(
-              padding: const EdgeInsets.all(12),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _createNewMemo,
-                  icon: const Icon(Icons.add),
-                  label: const Text('新建备忘录'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+        // 标签筛选
+        if (!_isTrashMode) _buildTagFilter(theme),
+
+        // 备忘录列表
+        Expanded(
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : _filteredMemos.isEmpty
+                  ? _buildEmptyListState(theme)
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: _filteredMemos.length,
+                      itemBuilder: (context, index) {
+                        final memo = _filteredMemos[index];
+                        final isSelected = _selectedMemo?.id == memo.id;
+
+                        return _MemoListItem(
+                          memo: memo,
+                          isSelected: isSelected,
+                          isTrashMode: _isTrashMode,
+                          onTap: () => _selectMemo(memo),
+                          onDelete: () => _deleteMemo(memo.id),
+                          onRestore: () => _restoreMemo(memo.id),
+                          onTogglePin: () => _togglePin(memo.id),
+                          onExport: () => _exportMemo(memo.id),
+                        );
+                      },
                     ),
+        ),
+
+        // 底部新建按钮（非回收站模式）
+        if (!_isTrashMode)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: _createNewMemo,
+                icon: const Icon(Icons.add),
+                label: const Text('新建备忘录'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: theme.brightness == Brightness.dark
+                      ? AppColors.actionFill
+                      : null,
+                  foregroundColor: theme.brightness == Brightness.dark
+                      ? AppColors.actionInk
+                      : null,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
             ),
-        ],
-      ),
+          ),
+      ],
+    );
+    if (isNarrow) {
+      return GlassPanel(
+          level: GlassSurfaceLevel.solid,
+          radius: 0,
+          opacity: .78,
+          child: content);
+    }
+    return ColoredBox(
+      color: theme.colorScheme.onSurface.withValues(alpha: .035),
+      child: content,
     );
   }
 
   Widget _buildSidebarHeader(ThemeData theme) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      constraints: const BoxConstraints(minHeight: 64),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
       ),
@@ -481,184 +643,275 @@ class _MemoPageState extends State<MemoPage> {
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
+          if (_sidebarCollapsed) ...[
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.view_sidebar, size: 18),
+              label: const Text('显示列表'),
+              onPressed: () {
+                setState(() => _sidebarCollapsed = false);
+                _saveSidebarWidth();
+              },
+            ),
+          ],
         ],
       ),
     );
   }
 
-  Widget _buildEditor(ThemeData theme) {
-    return Container(
-      color: theme.colorScheme.surface,
-      child: Column(
-        children: [
-          // 编辑器工具栏
-          _buildEditorToolbar(theme),
+  Widget _buildEditor(ThemeData theme, {required bool isNarrow}) {
+    final content = Column(
+      children: [
+        // 编辑器工具栏
+        _buildEditorToolbar(theme, isNarrow: isNarrow),
 
-          // 标题输入
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _titleController,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
+        Expanded(
+          child: LayoutBuilder(builder: (context, bounds) {
+            final inset = bounds.maxWidth < 520 ? 20.0 : 40.0;
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 820),
+                child: Padding(
+                  padding:
+                      EdgeInsets.fromLTRB(inset, isNarrow ? 12 : 24, inset, 16),
+                  child: Column(children: [
+                    // 标题输入
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: TextField(
+                        controller: _titleController,
+                        style: AppType.display(
+                            size: 30,
+                            weight: FontWeight.w600,
+                            color: theme.colorScheme.onSurface),
+                        decoration: const InputDecoration(
+                          hintText: '备忘录名称',
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          filled: false,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        onChanged: (_) => _autoSave(),
+                      ),
+                    ),
+
+                    Divider(
+                        height: 1,
+                        color:
+                            theme.colorScheme.onSurface.withValues(alpha: .10)),
+
+                    // 默认逐段预览；整篇源码模式保留给复杂 Markdown 编辑。
+                    Expanded(
+                      child: _isSourceMode
+                          ? _buildEditArea(theme)
+                          : LiveMarkdownEditor(
+                              key: ValueKey(_selectedMemo?.id),
+                              controller: _contentController,
+                              onChanged: _autoSave,
+                              styleSheet: _markdownStyleSheet(theme),
+                            ),
+                    ),
+                  ]),
+                ),
               ),
-              decoration: const InputDecoration(
-                hintText: '标题',
-                border: InputBorder.none,
-                contentPadding: EdgeInsets.zero,
-              ),
-              onChanged: (_) => _autoSave(),
-            ),
-          ),
-
-          const Divider(height: 1),
-
-          // 内容区域（编辑或预览）
-          Expanded(
-            child: _isPreviewMode ? _buildPreview(theme) : _buildEditArea(theme),
-          ),
-        ],
-      ),
+            );
+          }),
+        ),
+      ],
     );
+    if (isNarrow) {
+      return GlassPanel(
+          level: theme.colorScheme.brightness == Brightness.dark
+              ? GlassSurfaceLevel.dark
+              : GlassSurfaceLevel.solid,
+          radius: 0,
+          opacity: theme.colorScheme.brightness == Brightness.dark ? .43 : .76,
+          child: content);
+    }
+    return content;
   }
 
   Widget _buildEditArea(ThemeData theme) {
+    final dark = theme.colorScheme.brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: TextField(
-        controller: _contentController,
-        maxLines: null,
-        expands: true,
-        style: theme.textTheme.bodyLarge?.copyWith(
-          fontFamily: 'monospace', // 使用等宽字体便于编辑 Markdown
+      padding: const EdgeInsets.only(top: 16, bottom: 16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        decoration: BoxDecoration(
+          color: dark
+              ? const Color(0xFF2A4351)
+                  .withValues(alpha: _editorFocused ? .48 : .32)
+              : Colors.white.withValues(alpha: _editorFocused ? .72 : .48),
+          border: Border.all(
+            color: dark
+                ? Colors.white.withValues(alpha: _editorFocused ? .56 : .28)
+                : AppColors.line.withValues(alpha: _editorFocused ? .9 : .55),
+          ),
+          borderRadius: BorderRadius.circular(14),
         ),
-        decoration: const InputDecoration(
-          hintText: '开始输入...',
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.zero,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _contentController,
+            focusNode: _contentFocus,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            cursorColor: dark ? AppColors.actionFill : AppColors.navy,
+            style: theme.textTheme.bodyLarge?.copyWith(
+                height: 1.8, color: dark ? Colors.white : AppColors.ink),
+            decoration: InputDecoration(
+              hintText: '在这里开始写...',
+              hintStyle: TextStyle(
+                  color: dark
+                      ? Colors.white.withValues(alpha: .70)
+                      : AppColors.muted),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              filled: false,
+              contentPadding: EdgeInsets.zero,
+            ),
+            onChanged: (_) => _autoSave(),
+          ),
         ),
-        onChanged: (_) => _autoSave(),
       ),
     );
   }
 
-  Widget _buildPreview(ThemeData theme) {
-    if (_contentController.text.trim().isEmpty) {
-      return Center(
-        child: Text(
-          '预览模式\n内容为空',
-          style: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
+  MarkdownStyleSheet _markdownStyleSheet(ThemeData theme) {
+    return MarkdownStyleSheet(
+      p: theme.textTheme.bodyLarge,
+      h1: theme.textTheme.headlineMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      h2: theme.textTheme.titleLarge?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      h3: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      h4: theme.textTheme.titleMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      h5: theme.textTheme.bodyMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      h6: theme.textTheme.bodyMedium?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      strong: theme.textTheme.bodyLarge?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      em: theme.textTheme.bodyLarge?.copyWith(
+        fontStyle: FontStyle.italic,
+      ),
+      code: TextStyle(
+        fontFamily: 'monospace',
+        backgroundColor:
+            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      blockquote: theme.textTheme.bodyLarge?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
+        fontStyle: FontStyle.italic,
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        border: Border(
+          left: BorderSide(
+            color: theme.colorScheme.primary,
+            width: 4,
           ),
-          textAlign: TextAlign.center,
         ),
-      );
-    }
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: MarkdownBody(
-        data: _contentController.text,
-        selectable: true,
-        styleSheet: MarkdownStyleSheet(
-          p: theme.textTheme.bodyLarge,
-          h1: theme.textTheme.headlineMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          h2: theme.textTheme.titleLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          h3: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          h4: theme.textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          h5: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          h6: theme.textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          strong: theme.textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          em: theme.textTheme.bodyLarge?.copyWith(
-            fontStyle: FontStyle.italic,
-          ),
-          code: TextStyle(
-            fontFamily: 'monospace',
-            backgroundColor: theme.colorScheme.surfaceContainerHighest.withOpacity(0.5),
-          ),
-          codeblockDecoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          blockquote: theme.textTheme.bodyLarge?.copyWith(
-            color: theme.colorScheme.onSurfaceVariant,
-            fontStyle: FontStyle.italic,
-          ),
-          blockquoteDecoration: BoxDecoration(
-            color: theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
-            border: Border(
-              left: BorderSide(
-                color: theme.colorScheme.primary,
-                width: 4,
-              ),
-            ),
-          ),
-          listBullet: theme.textTheme.bodyLarge,
-          tableHead: theme.textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-          tableBody: theme.textTheme.bodySmall,
-          tableBorder: TableBorder.all(
+      ),
+      listBullet: theme.textTheme.bodyLarge,
+      tableHead: theme.textTheme.titleSmall?.copyWith(
+        fontWeight: FontWeight.bold,
+      ),
+      tableBody: theme.textTheme.bodySmall,
+      tableBorder: TableBorder.all(
+        color: theme.colorScheme.outlineVariant,
+        width: 1,
+      ),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
             color: theme.colorScheme.outlineVariant,
             width: 1,
           ),
-          horizontalRuleDecoration: BoxDecoration(
-            border: Border(
-              top: BorderSide(
-                color: theme.colorScheme.outlineVariant,
-                width: 1,
-              ),
-            ),
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildEditorToolbar(ThemeData theme) {
+  Widget _buildEditorToolbar(ThemeData theme, {required bool isNarrow}) {
     return Container(
+      constraints: const BoxConstraints(minHeight: 64),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(
-            color: theme.colorScheme.outlineVariant.withOpacity(0.3),
+            color: theme.colorScheme.outlineVariant.withValues(alpha: 0.3),
           ),
         ),
       ),
       child: Row(
         children: [
-          Text(
-            _selectedMemo?.formattedUpdatedAt ?? '',
+          if (isNarrow) ...[
+            // 窄屏单栏模式：返回列表
+            IconButton(
+              icon: const Icon(Icons.arrow_back),
+              tooltip: '返回列表',
+              onPressed: () => setState(() => _showEditorPane = false),
+            ),
+            const SizedBox(width: 4),
+          ] else ...[
+            // 宽屏：收起/展开侧栏，收起后编辑器占满全宽
+            IconButton(
+              icon: Icon(_sidebarCollapsed
+                  ? Icons.view_sidebar
+                  : Icons.view_sidebar_outlined),
+              tooltip: _sidebarCollapsed ? '显示列表' : '收起列表',
+              onPressed: () {
+                setState(() => _sidebarCollapsed = !_sidebarCollapsed);
+                _saveSidebarWidth();
+              },
+            ),
+          ],
+          Expanded(
+              child: Text(
+            _saveStatus ?? _selectedMemo?.formattedUpdatedAt ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+              color: _saveStatus == null
+                  ? theme.colorScheme.onSurfaceVariant
+                  : (_saveStatus!.startsWith('已保存')
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.onSurfaceVariant),
             ),
-          ),
-          const Spacer(),
-          // 编辑/预览切换
-          TextButton.icon(
-            onPressed: () {
-              setState(() => _isPreviewMode = !_isPreviewMode);
-            },
-            icon: Icon(_isPreviewMode ? Icons.edit : Icons.visibility),
-            label: Text(_isPreviewMode ? '编辑' : '预览'),
-            style: TextButton.styleFrom(
-              foregroundColor: theme.colorScheme.primary,
+          )),
+          // 实时预览是默认阅读状态，复杂内容仍可整篇编辑源码。
+          if (isNarrow)
+            IconButton(
+              onPressed: () => setState(() => _isSourceMode = !_isSourceMode),
+              icon: Icon(_isSourceMode ? Icons.visibility : Icons.code),
+              tooltip: _isSourceMode ? '实时预览' : '源码',
+            )
+          else
+            TextButton.icon(
+              onPressed: () => setState(() => _isSourceMode = !_isSourceMode),
+              icon: Icon(_isSourceMode ? Icons.visibility : Icons.code),
+              label: Text(_isSourceMode ? '实时预览' : '源码'),
+              style: TextButton.styleFrom(
+                foregroundColor: theme.colorScheme.primary,
+              ),
             ),
-          ),
           const SizedBox(width: 8),
           // 置顶按钮
           IconButton(
@@ -699,25 +952,38 @@ class _MemoPageState extends State<MemoPage> {
     );
   }
 
-  void _selectMemo(Memo memo) {
+  Future<void> _selectMemo(Memo memo) async {
+    if (_selectedMemo?.id != memo.id) await _flushPendingSave();
+    if (!mounted) return;
+    _saveDebounce?.cancel();
     setState(() {
       _selectedMemo = memo;
       _titleController.text = memo.title;
       _contentController.text = memo.content;
-      _isPreviewMode = false; // 选择备忘录时默认编辑模式
+      _isSourceMode = false; // 打开已有备忘录时直接显示排版效果
+      _showEditorPane = true; // 窄屏单栏模式切换到编辑页
+      _saveStatus = null;
     });
   }
 
-  // 自动保存（防抖）
-  DateTime? _lastSaveTime;
+  // 自动保存（防抖 + 状态反馈）
   void _autoSave() {
-    final now = DateTime.now();
-    if (_lastSaveTime != null &&
-        now.difference(_lastSaveTime!).inSeconds < 2) {
-      return;
-    }
-    _lastSaveTime = now;
-    _saveMemo();
+    setState(() => _saveStatus = '未保存');
+    _saveDebounce?.cancel();
+    _saveDebounce = Timer(const Duration(milliseconds: 800), () async {
+      if (!mounted || _selectedMemo == null) return;
+      setState(() => _saveStatus = '保存中…');
+      await _saveMemo();
+      if (mounted) {
+        setState(() => _saveStatus = '已保存 ${_nowClock()}');
+      }
+    });
+  }
+
+  String _nowClock() {
+    final t = DateTime.now();
+    String p2(int v) => v.toString().padLeft(2, '0');
+    return '${p2(t.hour)}:${p2(t.minute)}';
   }
 }
 
@@ -748,73 +1014,83 @@ class _MemoListItem extends StatefulWidget {
 }
 
 class _MemoListItemState extends State<_MemoListItem> {
+  bool _hovered = false;
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: widget.isSelected
-              ? theme.colorScheme.primaryContainer.withOpacity(0.3)
-              : theme.colorScheme.surfaceContainerHighest.withOpacity(0.3),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          margin: const EdgeInsets.only(bottom: 3),
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
             color: widget.isSelected
-                ? theme.colorScheme.primary.withOpacity(0.5)
-                : Colors.transparent,
+                ? Colors.white.withValues(
+                    alpha: theme.brightness == Brightness.dark ? .17 : .57)
+                : _hovered
+                    ? Colors.white.withValues(
+                        alpha: theme.brightness == Brightness.dark ? .08 : .25)
+                    : Colors.transparent,
+            borderRadius: BorderRadius.circular(13),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 标题行
-            Row(
-              children: [
-                if (widget.memo.isPinned && !widget.isTrashMode) ...[
-                  Icon(
-                    Icons.push_pin,
-                    size: 14,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(width: 4),
-                ],
-                Expanded(
-                  child: Text(
-                    widget.memo.title,
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      fontWeight: FontWeight.w600,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // 标题行
+              Row(
+                children: [
+                  if (widget.memo.isPinned && !widget.isTrashMode) ...[
+                    Icon(
+                      Icons.push_pin,
+                      size: 14,
+                      color: theme.colorScheme.primary,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 4),
+                  ],
+                  Expanded(
+                    child: Text(
+                      widget.memo.title.trim().isEmpty ||
+                              widget.memo.title == '新备忘录' ||
+                              widget.memo.title == '无标题'
+                          ? '未命名备忘录 · ${widget.memo.createdAt.month}月${widget.memo.createdAt.day}日'
+                          : widget.memo.title,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
+                  // 操作按钮
+                  if (widget.isTrashMode) _buildActionButtons(theme),
+                ],
+              ),
+              const SizedBox(height: 4),
+              // 摘要
+              Text(
+                widget.memo.summary,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-                // 操作按钮
-                _buildActionButtons(theme),
-              ],
-            ),
-            const SizedBox(height: 4),
-            // 摘要
-            Text(
-              widget.memo.summary,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 8),
-            // 时间
-            Text(
-              widget.memo.formattedUpdatedAt,
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+              const SizedBox(height: 8),
+              // 时间
+              Text(
+                widget.memo.formattedUpdatedAt,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -907,14 +1183,16 @@ class _TagFilterChip extends StatelessWidget {
           border: Border.all(
             color: isSelected
                 ? (color ?? theme.colorScheme.primary)
-                : theme.colorScheme.outlineVariant.withOpacity(0.5),
+                : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
           ),
         ),
         child: Text(
           label,
           style: theme.textTheme.bodySmall?.copyWith(
             color: isSelected
-                ? Colors.white
+                ? (theme.brightness == Brightness.dark
+                    ? theme.colorScheme.onPrimary
+                    : Colors.white)
                 : theme.colorScheme.onSurfaceVariant,
             fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
           ),

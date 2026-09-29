@@ -9,9 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
   cupertino_icons: ^1.0.6
   window_manager: ^0.3.8
-  intl: ^0.19.0
+  screen_retriever: ^0.1.9
+  intl: ^0.20.2
   shared_preferences: ^2.2.2
 
   # Database
@@ -30,6 +33,9 @@ dependencies:
   excel_wps: ^4.0.79
   archive: ^3.6.1
   xml: ^6.0.0
+  muscle_mapper:
+    path: third_party/muscle_mapper
+  url_launcher: ^6.3.0
   file_picker: ^8.0.0
 
   # Android Widget
@@ -38,6 +44,14 @@ dependencies:
   # Markdown & LaTeX Support
   flutter_markdown: ^0.6.18+3
   markdown_widget: ^2.3.2+8
+  share_plus: ^12.0.2
+  flutter_local_notifications: ^22.3.1
+  timezone: ^0.11.1
+  flutter_timezone: ^5.1.0
+  local_notifier: ^0.1.6
+  tray_manager: 0.5.3
+  http: ^1.6.0
+  package_info_plus: ^9.0.1
 
 dev_dependencies:
   flutter_test:
@@ -53,15 +67,41 @@ dev_dependencies:
 
 flutter_launcher_icons:
   android: true
-  ios: true
+  ios: false
   windows:
     generate: true
     icon_size: 256
   image_path: "app_icon.png"
   adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "app_icon.png"
+  adaptive_icon_foreground: "app_icon_foreground.png"
 
 flutter:
   uses-material-design: true
   assets:
     - assets/sounds/
+    - assets/backgrounds/study_room.png
+    - assets/backgrounds/daily_study.png
+    - assets/backgrounds/daylight_study_final.png
+    - assets/backgrounds/alpine_noon.png
+    - assets/backgrounds/alpine_dawn.png
+    - assets/backgrounds/alpine_dusk.png
+    - assets/backgrounds/alpine_night.png
+    - background1.png
+    - background2.png
+    - background3.png
+    - background4.png
+    - background5.png
+  fonts:
+    - family: MiSans
+      fonts:
+        - asset: assets/fonts/MiSans-Regular-subset.ttf
+          weight: 400
+        - asset: assets/fonts/MiSans-Medium-subset.ttf
+          weight: 500
+        - asset: assets/fonts/MiSans-Semibold-subset.ttf
+          weight: 600
+        - asset: assets/fonts/MiSans-Bold-subset.ttf
+          weight: 700
+    - family: NotoSerifSC
+      fonts:
+        - asset: assets/fonts/NotoSerifSC-Headings.ttf

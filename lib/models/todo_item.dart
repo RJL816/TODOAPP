@@ -67,6 +67,22 @@ class TodoItem {
   /// 排序权重（用于拖拽排序）
   late int sortOrder;
 
+  /// 开始时间（可选，提醒锚点之一）
+  DateTime? startTime;
+
+  /// 截止时间（可选，提醒优先锚点）
+  DateTime? deadline;
+
+  /// 提前提醒分钟数（默认 15）
+  late int remindBeforeMinutes = 15;
+
+  /// 是否开启提醒
+  late bool isReminderEnabled = false;
+
+  /// 每日习惯的打卡提醒时刻（当天分钟数，如 21:00 = 1260；null = 不提醒）。
+  /// 仅 recurring 任务使用；与一次性的 deadline 提醒体系相互独立。
+  int? habitRemindMinutes;
+
   TodoItem() {
     // 默认为一次性任务，兼容旧数据
     taskType = TaskType.oneTime;
@@ -81,17 +97,32 @@ class TodoItem {
     this.taskType = TaskType.oneTime,
     this.category = TaskCategory.life,
     this.notes,
+    this.deadline,
+    bool enableReminder = false,
+    int remindBeforeMinutes = 15,
   })  : isCompleted = false,
         createdDate = _normalizeDate(date),
         createdAt = DateTime.now().millisecondsSinceEpoch,
-        sortOrder = DateTime.now().millisecondsSinceEpoch;
+        sortOrder = DateTime.now().millisecondsSinceEpoch {
+    isReminderEnabled = enableReminder;
+    this.remindBeforeMinutes = remindBeforeMinutes;
+  }
+
+  /// 是否已过期：一次性任务的截止时刻已过（展示层用它从"待处理"里隐藏；
+  /// 数据保留在库中，历史统计不受影响）。
+  bool isExpired({DateTime? now}) {
+    if (taskType != TaskType.oneTime) return false;
+    final deadline = this.deadline;
+    if (deadline == null) return false;
+    return deadline.isBefore(now ?? DateTime.now());
+  }
 
   /// 将日期归一化（去除时分秒）
   static DateTime _normalizeDate(DateTime date) {
     return DateTime(date.year, date.month, date.day);
   }
 
-  /// 转换为 JSON（用于调试或导出）
+  /// 转换为 JSON（用于备份导出）
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
@@ -103,11 +134,16 @@ class TodoItem {
         'category': category.name,
         'notes': notes,
         'sortOrder': sortOrder,
+        'startTime': startTime?.toIso8601String(),
+        'deadline': deadline?.toIso8601String(),
+        'remindBeforeMinutes': remindBeforeMinutes,
+        'isReminderEnabled': isReminderEnabled,
+        'habitRemindMinutes': habitRemindMinutes,
       };
 
-  /// 从 JSON 创建（用于导入）
+  /// 从 JSON 创建（用于导入/恢复）
   factory TodoItem.fromJson(Map<String, dynamic> json) => TodoItem()
-    ..id = json['id'] as int
+    ..id = (json['id'] as int?) ?? Isar.autoIncrement
     ..title = json['title'] as String
     ..isCompleted = json['isCompleted'] as bool
     ..createdDate = DateTime.parse(json['createdDate'] as String)
@@ -128,5 +164,14 @@ class TodoItem {
           )
         : TaskCategory.life
     ..notes = json['notes'] as String?
-    ..sortOrder = json['sortOrder'] as int? ?? 0;
+    ..sortOrder = json['sortOrder'] as int? ?? 0
+    ..startTime = json['startTime'] != null
+        ? DateTime.parse(json['startTime'] as String)
+        : null
+    ..deadline = json['deadline'] != null
+        ? DateTime.parse(json['deadline'] as String)
+        : null
+    ..remindBeforeMinutes = json['remindBeforeMinutes'] as int? ?? 15
+    ..isReminderEnabled = json['isReminderEnabled'] as bool? ?? false
+    ..habitRemindMinutes = json['habitRemindMinutes'] as int?;
 }

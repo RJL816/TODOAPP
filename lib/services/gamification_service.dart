@@ -13,8 +13,9 @@ class GamificationService {
 
   GamificationService._();
 
-  // 音频播放器
-  final AudioPlayer _audioPlayer = AudioPlayer();
+  // 音频播放器：懒加载，未播放过音效前不占用原生资源
+  AudioPlayer? _audioPlayer;
+  AudioPlayer get _player => _audioPlayer ??= AudioPlayer();
 
   // Confetti 控制器列表（支持多个实例）
   final List<ConfettiController> _confettiControllers = [];
@@ -37,7 +38,7 @@ class GamificationService {
     try {
       // 使用系统提示音作为替代
       // 在 Windows 上会播放系统默认的提示音
-      await _audioPlayer.play(AssetSource('sounds/check.mp3'));
+      await _player.play(AssetSource('sounds/check.wav'));
     } catch (e) {
       // 如果音频文件不存在，静默失败
       debugPrint('Audio play failed: $e');
@@ -47,7 +48,7 @@ class GamificationService {
   /// 播放所有任务完成音效（更欢快的音效）
   Future<void> playAllCompleteSound() async {
     try {
-      await _audioPlayer.play(AssetSource('sounds/celebration.mp3'));
+      await _player.play(AssetSource('sounds/celebration.wav'));
     } catch (e) {
       debugPrint('Audio play failed: $e');
     }
@@ -76,7 +77,8 @@ class GamificationService {
 
   /// 释放资源
   void dispose() {
-    _audioPlayer.dispose();
+    _audioPlayer?.dispose();
+    _audioPlayer = null;
     for (final controller in _confettiControllers) {
       controller.dispose();
     }
@@ -84,7 +86,7 @@ class GamificationService {
   }
 }
 
-/// 连续打卡天数显示组件
+/// 连续打卡天数显示组件（顶栏右侧的暖光玻璃胶囊）
 class StreakDisplayWidget extends StatelessWidget {
   final int streak;
 
@@ -96,43 +98,55 @@ class StreakDisplayWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final lit = streak > 0;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 7),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: streak > 0
-              ? [Colors.orange[400]!, Colors.orange[600]!]
-              : [Colors.grey[400]!, Colors.grey[500]!],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
+        borderRadius: BorderRadius.circular(999),
+        gradient: lit
+            ? const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  Color(0x4DF6E3BE),
+                  Color(0x24E4A93E),
+                ],
+              )
+            : null,
+        color: lit ? null : Colors.white.withValues(alpha: .10),
+        border: Border.all(
+          color: lit
+              ? const Color(0x59FFFFFF)
+              : Colors.white.withValues(alpha: .22),
         ),
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: (streak > 0 ? Colors.orange : Colors.grey).withOpacity(0.3),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        boxShadow: lit
+            ? [
+                BoxShadow(
+                  color: const Color(0xFFE4A93E).withValues(alpha: .30),
+                  blurRadius: 16,
+                  offset: const Offset(0, 3),
+                ),
+              ]
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // 火焰图标（有连续天数时显示动画效果）
-          if (streak > 0)
+          // 火焰图标（有连续天数时点亮暖琥珀）
+          if (lit)
             const Icon(
               Icons.local_fire_department,
-              color: Colors.white,
-              size: 18,
+              color: Color(0xFFF3B04E),
+              size: 17,
             )
           else
             const Icon(
               Icons.emoji_events_outlined,
-              color: Colors.white70,
-              size: 18,
+              color: Colors.white,
+              size: 17,
             ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 7),
           // 文本显示
           Text(
             '$streak天',
@@ -140,6 +154,7 @@ class StreakDisplayWidget extends StatelessWidget {
               color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: 13,
+              letterSpacing: .3,
             ),
           ),
         ],
@@ -160,7 +175,8 @@ class ConfettiCelebrationWidget extends StatefulWidget {
   });
 
   @override
-  State<ConfettiCelebrationWidget> createState() => _ConfettiCelebrationWidgetState();
+  State<ConfettiCelebrationWidget> createState() =>
+      _ConfettiCelebrationWidgetState();
 }
 
 class _ConfettiCelebrationWidgetState extends State<ConfettiCelebrationWidget> {
@@ -169,7 +185,8 @@ class _ConfettiCelebrationWidgetState extends State<ConfettiCelebrationWidget> {
   @override
   void initState() {
     super.initState();
-    _confettiController = GamificationService.instance.createConfettiController();
+    _confettiController =
+        GamificationService.instance.createConfettiController();
   }
 
   @override

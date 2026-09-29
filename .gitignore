@@ -131,3 +131,12 @@ build/
 
 # Local configuration files (can contain sensitive data)
 .local.properties
+
+# 本地工具与设计产物（AI 会话临时脚本、设计稿、QA 截图）
+.zcode/
+.zcodeignore
+design/
+docs/visual-qa/
+scripts/drive_app.ps1
+scripts/patch_main_*.py
+scripts/snap_today.ps1

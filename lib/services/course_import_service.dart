@@ -1,11 +1,13 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:excel_wps/excel.dart';
 import '../models/course.dart';
 import 'excel_preprocessor.dart';
+import 'xls_decoder.dart';
 
 /// 课程导入服务
 /// 负责从教务系统导出的 Excel 文件中解析课程信息
-/// 支持 .xlsx 格式（.xls 需转换后导入）
+/// 支持 .xlsx（excel_wps）与老版 .xls（内置 BIFF8 解码器，见 xls_decoder.dart）
 class CourseImportService {
   static CourseImportService? _instance;
   static CourseImportService get instance {
@@ -19,7 +21,7 @@ class CourseImportService {
   /// @return 解析出的课程列表
   Future<List<Course>> importFromExcel(String filePath) async {
     final normalizedPath = filePath.trim();
-    final isXls = normalizedPath.toLowerCase().endsWith('.xls') && 
+    final isXls = normalizedPath.toLowerCase().endsWith('.xls') &&
                   !normalizedPath.toLowerCase().endsWith('.xlsx');
 
     // 先检查文件是否存在
@@ -28,13 +30,12 @@ class CourseImportService {
       throw Exception('文件不存在: $normalizedPath');
     }
 
-    // xls 格式暂不支持，提示用户转换
     if (isXls) {
-      throw Exception(
-        '暂不支持 .xls 格式文件。\n\n'
-        '请用 Excel 或 WPS 打开文件，然后"另存为" .xlsx 格式后再导入。\n\n'
-        '步骤：打开文件 → 文件 → 另存为 → 选择"Excel 工作簿 (*.xlsx)"'
-      );
+      final courses = await _parseXlsFile(file);
+      if (courses.isEmpty) {
+        throw Exception('未能解析到任何课程，请确认文件是教务系统导出的课表文件。');
+      }
+      return courses;
     }
 
     // xlsx 格式使用 excel_wps 解析
@@ -72,9 +73,6 @@ class CourseImportService {
       // 使用 excel_wps 包的 decodeBytes 方法
       final Excel excel = Excel.decodeBytes(bytes);
 
-      final courses = <Course>[];
-      String? currentSemester;
-
       // 获取第一个工作表
       final Sheet sheet = excel.tables.values.first;
 
@@ -83,57 +81,86 @@ class CourseImportService {
         throw Exception('工作表为空');
       }
 
-      final lastRow = sheet.rows.length;
-
-      // 解析学期信息（第2行，索引1）
-      if (lastRow >= 2) {
-        final row = sheet.rows[1]; // 索引1表示第2行
-        if (row.isNotEmpty) {
-          final cellText = _getCellValue(row[0]);
-          if (cellText != null) {
-            final semesterMatch = RegExp(r'学年学期[：:]\s*(\d{4}-\d{4}-\d)').firstMatch(cellText);
-            if (semesterMatch != null && semesterMatch.group(1) != null) {
-              currentSemester = semesterMatch.group(1)!;
-            }
-          }
-        }
-      }
-
-      // 课程数据从第4行开始（行索引3，数组从0开始计数）
-      final timeSlotConfig = [
-        {'rowIndex': 3, 'period': 1},  // 第一大节（第4行，索引3）
-        {'rowIndex': 4, 'period': 3},  // 第二大节（第5行，索引4）
-        {'rowIndex': 5, 'period': 5},  // 第三大节（第6行，索引5）
-        {'rowIndex': 6, 'period': 7},  // 第四大节（第7行，索引6）
-        {'rowIndex': 7, 'period': 9},  // 第五大节（第8行，索引7）
+      // 转成文本矩阵（行 × 列），与 xls 路径共用同一套结构解析
+      final grid = <List<String?>>[
+        for (final row in sheet.rows)
+          [for (final cell in row) _getCellValue(cell)],
       ];
-
-      for (var slot in timeSlotConfig) {
-        final rowIndex = slot['rowIndex'] as int;
-
-        if (rowIndex >= lastRow) break;
-
-        final row = sheet.rows[rowIndex];
-
-        for (int weekday = 1; weekday <= 7; weekday++) {
-          // Excel表格第0列是时间段，第1列开始是周一到周日
-          final colIndex = weekday; // weekday=1→colIndex=1(周一), weekday=7→colIndex=7(周日)
-          if (colIndex >= row.length) break;
-
-          final cellText = _getCellValue(row[colIndex]);
-
-          if (cellText == null || cellText.trim().isEmpty) continue;
-          if (cellText.contains('第') && cellText.contains('节')) continue;
-
-          final parsedCourses = _parseCourseCell(cellText, weekday, slot['period'] as int, currentSemester);
-          courses.addAll(parsedCourses);
-        }
-      }
-
-      return courses;
+      return _parseGrid(grid);
     } catch (e) {
       throw Exception('Excel 解析失败: $e');
     }
+  }
+
+  /// 使用内置 BIFF8 解码器解析老版 .xls 文件
+  Future<List<Course>> _parseXlsFile(File file) async {
+    final Uint8List bytes = await file.readAsBytes();
+    try {
+      final grid = decodeXlsFirstSheet(bytes);
+      if (grid.isEmpty) {
+        throw Exception('工作表为空');
+      }
+      return _parseGrid(grid);
+    } catch (e) {
+      throw Exception('Excel 解析失败: $e');
+    }
+  }
+
+  /// 按教务系统课表的固定结构解析文本矩阵：
+  /// 第 2 行（索引 1）为学年学期；第 4–8 行（索引 3–7）为五个大节；
+  /// 每行第 0 列是时间段，第 1–7 列为周一到周日。
+  List<Course> _parseGrid(List<List<String?>> grid) {
+    final courses = <Course>[];
+    String? currentSemester;
+
+    final lastRow = grid.length;
+
+    // 解析学期信息（第2行，索引1）
+    if (lastRow >= 2) {
+      final row = grid[1];
+      if (row.isNotEmpty) {
+        final cellText = row[0];
+        if (cellText != null) {
+          final semesterMatch = RegExp(r'学年学期[：:]\s*(\d{4}-\d{4}-\d)').firstMatch(cellText);
+          if (semesterMatch != null && semesterMatch.group(1) != null) {
+            currentSemester = semesterMatch.group(1)!;
+          }
+        }
+      }
+    }
+
+    // 课程数据从第4行开始（行索引3，数组从0开始计数）
+    final timeSlotConfig = [
+      {'rowIndex': 3, 'period': 1},  // 第一大节（第4行，索引3）
+      {'rowIndex': 4, 'period': 3},  // 第二大节（第5行，索引4）
+      {'rowIndex': 5, 'period': 5},  // 第三大节（第6行，索引5）
+      {'rowIndex': 6, 'period': 7},  // 第四大节（第7行，索引6）
+      {'rowIndex': 7, 'period': 9},  // 第五大节（第8行，索引7）
+    ];
+
+    for (var slot in timeSlotConfig) {
+      final rowIndex = slot['rowIndex'] as int;
+
+      if (rowIndex >= lastRow) break;
+
+      final row = grid[rowIndex];
+
+      for (int weekday = 1; weekday <= 7; weekday++) {
+        // Excel表格第0列是时间段，第1列开始是周一到周日
+        final colIndex = weekday; // weekday=1→colIndex=1(周一), weekday=7→colIndex=7(周日)
+        if (colIndex >= row.length) break;
+
+        final cellText = row[colIndex];
+
+        if (cellText == null || cellText.trim().isEmpty) continue;
+        if (cellText.contains('第') && cellText.contains('节')) continue;
+
+        final parsedCourses = _parseCourseCell(cellText, weekday, slot['period'] as int, currentSemester);
+        courses.addAll(parsedCourses);
+      }
+    }
+
+    return courses;
   }
 
   /// 获取单元格的值（处理不同类型的单元格）

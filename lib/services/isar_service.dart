@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:isar/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -5,6 +6,11 @@ import '../models/todo_item.dart';
 import '../models/daily_completion.dart';
 import '../models/course.dart';
 import '../models/memo.dart';
+import '../models/class_time_config.dart';
+import '../models/pomodoro_session.dart';
+import '../models/training.dart';
+import '../models/diet_log.dart';
+import '../models/expense.dart';
 
 /// Isar 数据库服务类
 class IsarService {
@@ -29,7 +35,23 @@ class IsarService {
     _prefs = await SharedPreferences.getInstance();
 
     _isar = await Isar.open(
-      [TodoItemSchema, DailyCompletionSchema, CourseSchema, SemesterConfigSchema, ExamSchema, MemoSchema, TagSchema],
+      [
+        TodoItemSchema,
+        DailyCompletionSchema,
+        CourseSchema,
+        SemesterConfigSchema,
+        ExamSchema,
+        MemoSchema,
+        TagSchema,
+        ClassTimeConfigSchema,
+        PomodoroSessionSchema,
+        TrainingPlanSchema,
+        PlanExerciseSchema,
+        WorkoutLogSchema,
+        WorkoutSetSchema,
+        DietLogSchema,
+        ExpenseSchema
+      ],
       directory: dir.path,
       inspector: true, // 开发模式下启用 Isar Inspector
     );
@@ -65,6 +87,13 @@ class IsarService {
       throw Exception('Isar database not initialized. Call init() first.');
     }
     return _isar!;
+  }
+
+  /// 测试注入口：直接使用已打开的 Isar 实例（跳过路径与跨天重置逻辑）
+  @visibleForTesting
+  void initForTest(Isar isar) {
+    _isar = isar;
+    _prefs = null;
   }
 
   /// 跨天重置逻辑
@@ -134,21 +163,22 @@ class IsarService {
     await isar.writeTxn(() async {
       final todo = await isar.todoItems.get(id);
       if (todo != null) {
-        final normalizedDate = DateTime(currentDate.year, currentDate.month, currentDate.day);
+        final normalizedDate =
+            DateTime(currentDate.year, currentDate.month, currentDate.day);
         final today = DateTime.now();
         final todayNormalized = DateTime(today.year, today.month, today.day);
-        
+
         if (todo.taskType.isRecurring) {
           // 每日习惯：只允许在今天切换状态，避免跨日期覆盖问题
           final isToday = normalizedDate.year == todayNormalized.year &&
               normalizedDate.month == todayNormalized.month &&
               normalizedDate.day == todayNormalized.day;
-          
+
           if (!isToday) {
             // 不是今天，不允许切换每日习惯的完成状态
             return;
           }
-          
+
           // 检查今天是否已经有完成记录
           // 使用 dateEqualTo 而不是 dateBetween，避免 DateTime 比较的精度问题
           final existingCompletion = await isar.dailyCompletions
@@ -157,7 +187,7 @@ class IsarService {
               .and()
               .dateEqualTo(todayNormalized)
               .findFirst();
-          
+
           if (existingCompletion != null) {
             // 已完成 -> 取消完成（删除记录）
             await isar.dailyCompletions.delete(existingCompletion.id);
@@ -171,15 +201,17 @@ class IsarService {
             await isar.dailyCompletions.put(completion);
             todo.isCompleted = true;
           }
-          
+
           // 更新completedAt用于向后兼容
-          todo.completedAt = todo.isCompleted ? todayNormalized.add(const Duration(hours: 12)) : null;
+          todo.completedAt = todo.isCompleted
+              ? todayNormalized.add(const Duration(hours: 12))
+              : null;
         } else {
           // 一次性任务：直接切换
           todo.isCompleted = !todo.isCompleted;
           todo.completedAt = todo.isCompleted ? DateTime.now() : null;
         }
-        
+
         await isar.todoItems.put(todo);
       }
     });
@@ -217,9 +249,12 @@ class IsarService {
     final endOfDay = normalizedDate.add(const Duration(days: 1));
 
     // 获取所有每日习惯（recurring 任务）
+    // 习惯只在其创建日期（含）之后出现，避免"创建之前的日期"被算作未完成
     final recurringTasks = await isar.todoItems
         .filter()
         .taskTypeEqualTo(TaskType.recurring)
+        .and()
+        .createdDateLessThan(endOfDay)
         .sortByCreatedAt()
         .findAll();
 
@@ -229,7 +264,7 @@ class IsarService {
         .filter()
         .dateEqualTo(normalizedDate)
         .findAll();
-    
+
     // 构建完成记录的Map，方便查询
     final completionMap = <int, bool>{};
     for (var completion in completions) {
@@ -240,41 +275,43 @@ class IsarService {
     final processedRecurring = recurringTasks.map((task) {
       // 检查是否有完成记录
       final isCompletedOnDate = completionMap[task.id] ?? false;
-      
+
       // 创建副本，避免修改原对象
       return TodoItem()
         ..id = task.id
         ..title = task.title
-        ..isCompleted = isCompletedOnDate  // 根据完成记录设置状态
+        ..isCompleted = isCompletedOnDate // 根据完成记录设置状态
         ..createdDate = task.createdDate
         ..createdAt = task.createdAt
         ..completedAt = task.completedAt
         ..taskType = task.taskType
-        ..category = task.category  // 复制分类
-        ..notes = task.notes  // 复制备注
-        ..sortOrder = task.sortOrder;  // 复制排序
+        ..category = task.category // 复制分类
+        ..notes = task.notes // 复制备注
+        ..sortOrder = task.sortOrder; // 复制排序
     }).toList();
 
     // 获取指定日期的一次性任务（包括已完成和未完成的）
     final oneTimeTasks = await isar.todoItems
-      .filter()
-      .taskTypeEqualTo(TaskType.oneTime)
-      .and()
-      .createdDateBetween(startOfDay, endOfDay, includeLower: true, includeUpper: false)
-      .sortByCreatedAt()
-      .findAll();
+        .filter()
+        .taskTypeEqualTo(TaskType.oneTime)
+        .and()
+        .createdDateBetween(startOfDay, endOfDay,
+            includeLower: true, includeUpper: false)
+        .sortByCreatedAt()
+        .findAll();
 
     // 合并并按创建时间排序
     final allTasks = [...processedRecurring, ...oneTimeTasks];
     allTasks.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-    
+
     return allTasks;
   }
 
   /// 获取指定日期范围内的所有任务
   Future<List<TodoItem>> getTodosBetween(DateTime start, DateTime end) async {
     final normalizedStart = DateTime(start.year, start.month, start.day);
-    final normalizedEnd = DateTime(end.year, end.month, end.day).add(const Duration(days: 1));
+    final normalizedEnd =
+        DateTime(end.year, end.month, end.day).add(const Duration(days: 1));
 
     return await isar.todoItems
         .filter()
@@ -289,7 +326,8 @@ class IsarService {
 
     final Map<DateTime, List<TodoItem>> grouped = {};
     for (var todo in todos) {
-      final dateKey = DateTime(todo.createdDate.year, todo.createdDate.month, todo.createdDate.day);
+      final dateKey = DateTime(
+          todo.createdDate.year, todo.createdDate.month, todo.createdDate.day);
       grouped.putIfAbsent(dateKey, () => []).add(todo);
     }
     return grouped;
@@ -300,7 +338,7 @@ class IsarService {
   /// 获取指定日期的完成率 (0.0 - 1.0)
   /// 统计所有任务（包括一次性任务和每日习惯）
   Future<double> getCompletionRate(DateTime date) async {
-    final todos = await getTodosForDate(date);  // 使用新的查询方法
+    final todos = await getTodosForDate(date); // 使用新的查询方法
     if (todos.isEmpty) return 0.0;
 
     // 统计所有任务的完成情况
@@ -310,19 +348,22 @@ class IsarService {
 
   /// 获取日期范围内的完成率统计
   /// 返回: Map<日期字符串, 完成率>
-  Future<Map<String, double>> getCompletionRatesInRange(DateTime start, DateTime end) async {
+  Future<Map<String, double>> getCompletionRatesInRange(
+      DateTime start, DateTime end) async {
     final todos = await getTodosBetween(start, end);
     final Map<String, List<TodoItem>> grouped = {};
 
     for (var todo in todos) {
-      final dateKey = '${todo.createdDate.year}-${todo.createdDate.month.toString().padLeft(2, '0')}-${todo.createdDate.day.toString().padLeft(2, '0')}';
+      final dateKey =
+          '${todo.createdDate.year}-${todo.createdDate.month.toString().padLeft(2, '0')}-${todo.createdDate.day.toString().padLeft(2, '0')}';
       grouped.putIfAbsent(dateKey, () => []).add(todo);
     }
 
     final Map<String, double> rates = {};
     for (var entry in grouped.entries) {
       final completed = entry.value.where((t) => t.isCompleted).length;
-      rates[entry.key] = entry.value.isEmpty ? 0.0 : completed / entry.value.length;
+      rates[entry.key] =
+          entry.value.isEmpty ? 0.0 : completed / entry.value.length;
     }
 
     return rates;
@@ -330,7 +371,7 @@ class IsarService {
 
   /// 获取指定日期的统计数据
   Future<DateStatistics> getStatisticsForDate(DateTime date) async {
-    final todos = await getTodosForDate(date);  // 使用新的查询方法
+    final todos = await getTodosForDate(date); // 使用新的查询方法
     final completed = todos.where((t) => t.isCompleted).length;
 
     return DateStatistics(
@@ -355,49 +396,84 @@ class IsarService {
     return stats;
   }
 
-  /// 获取连续完成天数（streak）
-  Future<int> getCurrentStreak() async {
-    int streak = 0;
+  /// 每日完成条数（热力图用）：一次性查出最近 [days] 天的打卡记录按日聚合，
+  /// 避免逐日查询。返回的日期均为归一化（0 点）键。
+  Future<Map<DateTime, int>> getDailyCompletionCounts({int days = 140}) async {
     final today = DateTime.now();
-    final todayNormalized = DateTime(today.year, today.month, today.day);
-    DateTime checkDate = todayNormalized;
+    final since = DateTime(today.year, today.month, today.day)
+        .subtract(Duration(days: days - 1));
+    final completions = await isar.dailyCompletions
+        .filter()
+        .dateGreaterThan(since.subtract(const Duration(days: 1)))
+        .findAll();
+    final counts = <DateTime, int>{};
+    for (final completion in completions) {
+      final day = DateTime(completion.date.year, completion.date.month,
+          completion.date.day);
+      counts[day] = (counts[day] ?? 0) + 1;
+    }
+    return counts;
+  }
 
-    while (true) {
-      final todos = await getTodosForDate(checkDate);  // 使用新的查询方法
-      
-      // 如果没有任务，中断计数
+  /// 获取连续完成天数（streak）
+  ///
+  /// 口径（与 docs/UPGRADE_PLAN.md 1A.5 一致，配套单元测试）：
+  /// - 有效任务日 =（按创建日期过滤后）当天任务数 > 0；全部完成计 1 天，存在未完成即中断
+  /// - 无任务日：不计入、不中断
+  /// - 今天未全部完成：不算中断（streak 以昨天为终点），全部完成则从今天计入
+  /// - 回溯下界 = min(最早数据日期, 今天 − 366 天)，到达即停，避免无限回溯查询
+  ///
+  /// [asOf] 供测试注入"当前时间"，生产调用不传。
+  Future<int> getCurrentStreak({DateTime? asOf}) async {
+    final now = asOf ?? DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    final earliest = await _getEarliestTodoDate();
+    final hardBound = today.subtract(const Duration(days: 366));
+    final floor = (earliest != null && earliest.isAfter(hardBound))
+        ? earliest
+        : hardBound;
+
+    int streak = 0;
+    DateTime checkDate = today;
+
+    // 从今天回溯到下界（含下界当天），下界之前不再回溯
+    while (!checkDate.isBefore(floor)) {
+      final todos = await getTodosForDate(checkDate);
+
       if (todos.isEmpty) {
+        // 无任务日：不计入、不中断
+        checkDate = checkDate.subtract(const Duration(days: 1));
+        continue;
+      }
+
+      final allCompleted = todos.every((t) => t.isCompleted);
+      final isToday = checkDate.year == today.year &&
+          checkDate.month == today.month &&
+          checkDate.day == today.day;
+
+      if (allCompleted) {
+        streak++;
+      } else if (isToday) {
+        // 今天未全部完成：不中断，继续回溯昨天
+      } else {
+        // 过去的有效任务日未全部完成 → 中断
         break;
       }
 
-      // 判断是否是今天
-      final isToday = checkDate.year == todayNormalized.year &&
-          checkDate.month == todayNormalized.month &&
-          checkDate.day == todayNormalized.day;
-
-      // 检查是否所有任务都完成
-      final allCompleted = todos.every((t) => t.isCompleted);
-      
-      if (isToday) {
-        // 今天：如果所有任务都完成了，计入连续打卡
-        if (allCompleted) {
-          streak++;
-        }
-        // 继续检查昨天（不管今天是否完成）
-        checkDate = checkDate.subtract(const Duration(days: 1));
-        continue;
-      } else {
-        // 过去的日期：必须所有任务都完成才算连续打卡
-        if (allCompleted) {
-          streak++;
-          checkDate = checkDate.subtract(const Duration(days: 1));
-        } else {
-          break;
-        }
-      }
+      checkDate = checkDate.subtract(const Duration(days: 1));
     }
 
     return streak;
+  }
+
+  /// 最早的任务创建日期（streak 回溯下界的数据部分）
+  Future<DateTime?> _getEarliestTodoDate() async {
+    final earliest =
+        await isar.todoItems.where().sortByCreatedDate().findFirst();
+    if (earliest == null) return null;
+    final d = earliest.createdDate;
+    return DateTime(d.year, d.month, d.day);
   }
 
   /// 清空所有数据（慎用）
@@ -434,17 +510,22 @@ class IsarService {
 
     return {
       'recurringCount': recurringTasks.length,
-      'recurringTasks': recurringTasks.map((t) => {
-        'id': t.id,
-        'title': t.title,
-        'isCompleted': t.isCompleted,
-      }).toList(),
+      'recurringTasks': recurringTasks
+          .map((t) => {
+                'id': t.id,
+                'title': t.title,
+                'isCompleted': t.isCompleted,
+              })
+          .toList(),
       'completionCount': allCompletions.length,
-      'completions': allCompletions.map((c) => {
-        'id': c.id,
-        'todoId': c.todoId,
-        'date': '${c.date.year}-${c.date.month.toString().padLeft(2, '0')}-${c.date.day.toString().padLeft(2, '0')}',
-      }).toList(),
+      'completions': allCompletions
+          .map((c) => {
+                'id': c.id,
+                'todoId': c.todoId,
+                'date':
+                    '${c.date.year}-${c.date.month.toString().padLeft(2, '0')}-${c.date.day.toString().padLeft(2, '0')}',
+              })
+          .toList(),
     };
   }
 }
@@ -463,7 +544,8 @@ class DateStatistics {
     required this.completionRate,
   });
 
-  String get dateString => '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  String get dateString =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Map<String, dynamic> toJson() => {
         'date': dateString,

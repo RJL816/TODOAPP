@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+
+import 'package:flutter/foundation.dart';
 import 'package:home_widget/home_widget.dart';
 import '../models/course.dart';
 
@@ -51,7 +53,7 @@ class WidgetService {
         androidName: _androidWidgetName,
       );
     } catch (e) {
-      print('同步 Widget 数据失败: $e');
+      debugPrint('同步 Widget 数据失败: $e');
     }
   }
 
@@ -65,7 +67,7 @@ class WidgetService {
         androidName: _androidWidgetName,
       );
     } catch (e) {
-      print('清空 Widget 数据失败: $e');
+      debugPrint('清空 Widget 数据失败: $e');
     }
   }
 }

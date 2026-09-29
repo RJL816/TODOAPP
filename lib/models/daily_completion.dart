@@ -26,4 +26,19 @@ class DailyCompletion {
     required DateTime completionDate,
   })  : date = DateTime(completionDate.year, completionDate.month, completionDate.day),
         timestamp = DateTime.now().millisecondsSinceEpoch;
+
+  /// 转换为 JSON（用于备份导出）
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'todoId': todoId,
+        'date': date.toIso8601String(),
+        'timestamp': timestamp,
+      };
+
+  /// 从 JSON 创建（用于备份恢复）
+  factory DailyCompletion.fromJson(Map<String, dynamic> json) => DailyCompletion()
+    ..id = (json['id'] as int?) ?? Isar.autoIncrement
+    ..todoId = json['todoId'] as int
+    ..date = DateTime.parse(json['date'] as String)
+    ..timestamp = (json['timestamp'] as int?) ?? 0;
 }
