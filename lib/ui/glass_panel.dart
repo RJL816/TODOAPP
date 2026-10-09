@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -20,11 +21,26 @@ abstract final class GlassTuning {
   static const defaultClarity = .55;
   static final ValueNotifier<double> clarity = ValueNotifier(defaultClarity);
 
+  /// 滚动进行中：玻璃退化为预烘焙渐变。
+  /// Android Impeller 上滚动中的实时模糊会丢帧闪烁（卡片瞬间透明又恢复），
+  /// 实时模糊本身也是手机端滚动卡顿的主因——滚动期间统一冻结。
+  static final ValueNotifier<bool> scrolling = ValueNotifier(false);
+
+  static final Listenable effectControls =
+      Listenable.merge([clarity, scrolling]);
+
+  /// 手机 GPU 普遍弱于桌面：实时模糊半径整体下调（开销随半径平方增长）
+  static final double deviceBlurFactor = Platform.isAndroid
+      ? .60
+      : Platform.isIOS
+          ? .80
+          : 1.0;
+
   static double tintScale(double value) =>
       lerpDouble(1.12, .30, value.clamp(0.0, 1.0))!;
 
   static double blurScale(double value) =>
-      lerpDouble(1.15, .20, value.clamp(0.0, 1.0))!;
+      lerpDouble(1.15, .20, value.clamp(0.0, 1.0))! * deviceBlurFactor;
 }
 
 class GlassPanel extends StatelessWidget {
@@ -46,9 +62,9 @@ class GlassPanel extends StatelessWidget {
   final bool shadow;
 
   @override
-  Widget build(BuildContext context) => ValueListenableBuilder<double>(
-        valueListenable: GlassTuning.clarity,
-        builder: (context, clarity, _) => _buildPanel(context, clarity),
+  Widget build(BuildContext context) => ListenableBuilder(
+        listenable: GlassTuning.effectControls,
+        builder: (context, _) => _buildPanel(context, GlassTuning.clarity.value),
       );
 
   Widget _buildPanel(BuildContext context, double clarity) {
@@ -117,8 +133,11 @@ class GlassPanel extends StatelessWidget {
         : Colors.white.withValues(alpha: isDark ? .30 : .48);
     final highlight = Colors.white.withValues(
         alpha: scene == AmbientPalette.night ? .34 : (isDark ? .56 : .70));
+    // 滚动冻结：实时模糊暂停时走无模糊渐变，防止滚动闪烁并省下模糊开销
+    final blurFrozen = GlassTuning.scrolling.value;
     final reduceEffects =
-        MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
+        (MediaQuery.maybeOf(context)?.accessibleNavigation ?? false) ||
+            blurFrozen;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),

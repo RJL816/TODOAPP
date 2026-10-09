@@ -1059,7 +1059,10 @@ class _TodoHomePageState extends State<TodoHomePage>
                 extendBody: true,
                 body: Stack(
                   children: [
-                    Positioned.fill(child: _buildAppBackdrop()),
+                    // 背景几乎静止：缓存光栅化，滚动/面板动画不触发它重新绘制
+                    Positioned.fill(
+                      child: RepaintBoundary(child: _buildAppBackdrop()),
+                    ),
                     if (!Platform.isWindows && !immersiveFocus)
                       Positioned(
                         top: 0,
@@ -1089,7 +1092,22 @@ class _TodoHomePageState extends State<TodoHomePage>
                             if (wide && !immersiveFocus)
                               _buildDesktopNav(theme),
                             Expanded(
-                                child: IndexedStack(
+                                child: NotificationListener<ScrollNotification>(
+                              // 滚动期间冻结实时模糊：防 Impeller 滚动闪烁 + 省模糊开销
+                              onNotification: (notification) {
+                                if (notification is ScrollStartNotification) {
+                                  if (!GlassTuning.scrolling.value) {
+                                    GlassTuning.scrolling.value = true;
+                                  }
+                                } else if (notification
+                                    is ScrollEndNotification) {
+                                  if (GlassTuning.scrolling.value) {
+                                    GlassTuning.scrolling.value = false;
+                                  }
+                                }
+                                return false;
+                              },
+                              child: IndexedStack(
                               index: _currentIndex,
                               children: [
                                 PageFrame(child: _buildTodoListPage(theme)),
@@ -1169,8 +1187,9 @@ class _TodoHomePageState extends State<TodoHomePage>
                                   ),
                                 ),
                               ],
-                            )),
-                          ]),
+                            ),
+                          )),
+                        ]),
                         ),
                       ],
                     ),
@@ -1888,11 +1907,149 @@ class _TodoHomePageState extends State<TodoHomePage>
   /// 问候头部以下的正文起点（接下来做 + 快速添加），单列/双列共用。
   List<Widget> _homeGreetingBody(ThemeData theme, double width) {
     final darkBackdrop = _showAmbientBackground;
+    final gap = SizedBox(height: width < 680 ? 12 : 14);
     return [
       _buildNowHero(theme),
-      SizedBox(height: width < 680 ? 12 : 14),
+      gap,
+      // 今日课程时间条：有课的日子优先展示全天安排
+      if (_isToday && (_brief?.coursesToday.isNotEmpty ?? false)) ...[
+        _buildTodayCoursesStrip(theme),
+        gap,
+      ],
       _buildQuickInput(theme, darkBackdrop),
     ];
+  }
+
+  /// 今日课程时间条：时间 · 课名 · 教室，正在上的高亮、已结束变淡
+  Widget _buildTodayCoursesStrip(ThemeData theme) {
+    final slots = _brief?.coursesToday ?? const [];
+    if (slots.isEmpty) return const SizedBox.shrink();
+    final ambient = _showAmbientBackground;
+    final palette = _ambientPalette;
+    return _TodayContentSurface(
+      dark: ambient,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(22, 14, 22, 8),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('今日课程',
+                style: TextStyle(
+                  fontFamily: AppTypography.sans,
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 2.4,
+                  color: ambient ? palette.secondaryText : AppColors.muted,
+                )),
+            const SizedBox(width: 10),
+            Text('${slots.length}',
+                style: AppType.display(
+                  size: 15,
+                  weight: FontWeight.w600,
+                  color: ambient ? palette.primaryText : AppColors.ink,
+                ).copyWith(fontFeatures: AppType.tabular)),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => _navigateTo(1),
+              child: Row(children: [
+                Text('课表',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: ambient ? palette.secondaryText : AppColors.muted,
+                    )),
+                Icon(Icons.chevron_right,
+                    size: 15,
+                    color:
+                        ambient ? palette.secondaryText : AppColors.muted),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          for (var i = 0; i < slots.length; i++)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Row(children: [
+                SizedBox(
+                  width: 104,
+                  child: Text(slots[i].timeLabel,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        fontFeatures: AppType.tabular,
+                        fontWeight: FontWeight.w600,
+                        color: slots[i].state == _CourseSlotState.past
+                            ? (ambient
+                                ? palette.secondaryText.withValues(alpha: .55)
+                                : AppColors.muted.withValues(alpha: .75))
+                            : (ambient
+                                ? palette.primaryText
+                                : AppColors.ink),
+                      )),
+                ),
+                Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: slots[i].state == _CourseSlotState.now
+                        ? AppColors.warmAmber
+                        : null,
+                    border: slots[i].state == _CourseSlotState.now
+                        ? null
+                        : Border.all(
+                            width: 1.2,
+                            color: slots[i].state == _CourseSlotState.past
+                                ? (ambient
+                                    ? palette.secondaryText
+                                        .withValues(alpha: .40)
+                                    : AppColors.muted.withValues(alpha: .55))
+                                : (ambient
+                                    ? palette.primaryText
+                                        .withValues(alpha: .75)
+                                    : AppColors.ink.withValues(alpha: .70))),
+                  ),
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    slots[i].state == _CourseSlotState.now
+                        ? '${slots[i].name}  ·  进行中'
+                        : slots[i].name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: AppTypography.sans,
+                      fontSize: 13.5,
+                      fontWeight: slots[i].state == _CourseSlotState.past
+                          ? FontWeight.w500
+                          : FontWeight.w600,
+                      color: slots[i].state == _CourseSlotState.past
+                          ? (ambient
+                              ? palette.secondaryText.withValues(alpha: .60)
+                              : AppColors.muted)
+                          : (ambient
+                              ? palette.primaryText
+                              : AppColors.ink),
+                    ),
+                  ),
+                ),
+                if (slots[i].room.isNotEmpty)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 150),
+                    child: Text(slots[i].room,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: ambient
+                              ? palette.secondaryText.withValues(
+                                  alpha: slots[i].state ==
+                                          _CourseSlotState.past
+                                      ? .50
+                                      : .85)
+                              : AppColors.muted,
+                        )),
+                  ),
+              ]),
+            ),
+        ]),
+      ),
+    );
   }
 
   /// 今日任务卡（待处理 + 已完成 + 已过期），单列/双列共用
@@ -2254,11 +2411,15 @@ class _TodoHomePageState extends State<TodoHomePage>
           Expanded(
             child: ClipRRect(
               borderRadius: BorderRadius.circular(18),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(
-                  sigmaX: 10 * GlassTuning.blurScale(_glassClarity),
-                  sigmaY: 10 * GlassTuning.blurScale(_glassClarity),
-                ),
+              child: ListenableBuilder(
+                listenable: GlassTuning.effectControls,
+                builder: (context, _) => BackdropFilter(
+                  // 滚动冻结：暂停实时模糊（防 Impeller 滚动闪烁）
+                  enabled: !GlassTuning.scrolling.value,
+                  filter: ImageFilter.blur(
+                    sigmaX: 10 * GlassTuning.blurScale(_glassClarity),
+                    sigmaY: 10 * GlassTuning.blurScale(_glassClarity),
+                  ),
                 child: Container(
                   height: 52,
                   decoration: BoxDecoration(
@@ -2327,6 +2488,7 @@ class _TodoHomePageState extends State<TodoHomePage>
               ),
             ),
           ),
+          ),
           const SizedBox(width: 11),
           _SoftActionButton(
             label: '添加',
@@ -2336,15 +2498,22 @@ class _TodoHomePageState extends State<TodoHomePage>
           ),
         ]),
         const SizedBox(height: 10),
-        // 任务类型下拉：一次性 / 长久习惯 / DDL；每种类型的后续选项不同
+        // 类型与分类合并为一个胶囊：菜单上半段选类型，下半段选分类，
+        // 窄屏不再折出冗余行
         Wrap(
             spacing: 8,
             runSpacing: 8,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               PopupMenuButton<String>(
-                tooltip: '选择任务类型',
+                tooltip: '选择任务类型与分类',
                 onSelected: (value) {
+                  if (value.startsWith('cat:')) {
+                    final category = TaskCategory.values
+                        .firstWhere((c) => 'cat:${c.name}' == value);
+                    setState(() => _selectedCategory = category);
+                    return;
+                  }
                   setState(() {
                     _quickKind = value;
                     // 切出 DDL 时清掉暂存的截止时间
@@ -2357,30 +2526,38 @@ class _TodoHomePageState extends State<TodoHomePage>
                 },
                 itemBuilder: (_) => [
                   const PopupMenuItem(
-                      value: 'oneTime',
-                      child: Row(children: [
-                        Icon(Icons.flag_outlined, size: 18),
-                        SizedBox(width: 10),
-                        Text('一次性'),
-                      ])),
-                  const PopupMenuItem(
-                      value: 'recurring',
-                      child: Row(children: [
-                        Icon(Icons.repeat, size: 18),
-                        SizedBox(width: 10),
-                        Text('长久习惯'),
-                      ])),
-                  const PopupMenuItem(
-                      value: 'ddl',
-                      child: Row(children: [
-                        Icon(Icons.schedule, size: 18),
-                        SizedBox(width: 10),
-                        Text('DDL · 到点提醒'),
-                      ])),
+                      enabled: false,
+                      child: Text('任务类型',
+                          style: TextStyle(
+                              fontSize: 12, fontWeight: FontWeight.w700))),
+                  _quickKindItem('oneTime', Icons.flag_outlined, '一次性'),
+                  _quickKindItem('recurring', Icons.repeat, '长久习惯'),
+                  _quickKindItem('ddl', Icons.schedule, 'DDL · 到点提醒'),
+                  if (_quickKind != 'ddl') ...[
+                    const PopupMenuDivider(),
+                    const PopupMenuItem(
+                        enabled: false,
+                        child: Text('分类',
+                            style: TextStyle(
+                                fontSize: 12, fontWeight: FontWeight.w700))),
+                    for (final category in TaskCategory.values)
+                      PopupMenuItem(
+                          value: 'cat:${category.name}',
+                          child: Row(children: [
+                            SizedBox(
+                                width: 20,
+                                child: _selectedCategory == category
+                                    ? const Icon(Icons.check, size: 17)
+                                    : null),
+                            const SizedBox(width: 8),
+                            Text(category.displayName),
+                          ])),
+                  ],
                 ],
-                color: AppColors.paper,
                 child: _GlassGhostButton(
-                  label: '${_quickKindLabel} ▾',
+                  label: _quickKind == 'ddl'
+                      ? '${_quickKindLabel} ▾'
+                      : '${_quickKindLabel} · ${_selectedCategory.displayName} ▾',
                   icon: _quickKind == 'ddl' ? Icons.schedule : Icons.tune,
                   plain: true,
                   onDark: onDark,
@@ -2393,18 +2570,27 @@ class _TodoHomePageState extends State<TodoHomePage>
                   tooltip: '清除截止时间',
                   onTap: () => setState(() => _quickDeadline = null),
                 ),
-              // 一次性 / 长久习惯：直接展开分类选择
-              if (_quickKind != 'ddl')
-                for (final category in TaskCategory.values)
-                  _OptionChip(
-                    label: category.displayName,
-                    selected: _selectedCategory == category,
-                    onDark: onDark,
-                    onTap: () => setState(() => _selectedCategory = category),
-                  ),
             ]),
       ],
     );
+  }
+
+  /// 类型菜单项：选中时行首显示对勾
+  PopupMenuItem<String> _quickKindItem(
+      String value, IconData icon, String label) {
+    return PopupMenuItem(
+        value: value,
+        child: Row(children: [
+          SizedBox(
+              width: 20,
+              child: _quickKind == value
+                  ? const Icon(Icons.check, size: 17)
+                  : null),
+          const SizedBox(width: 8),
+          Icon(icon, size: 18),
+          const SizedBox(width: 10),
+          Text(label),
+        ]));
   }
 
   /// 生活条：训练 / 饮食 / 支出 / 专注，一行四个真实数字
@@ -2964,6 +3150,40 @@ class _TodoHomePageState extends State<TodoHomePage>
         }
       }
 
+      // 当天全部课程映射为钟点条目：正在上的高亮、已结束变淡
+      final courseSlots = <_CourseSlot>[];
+      for (final course in courses) {
+        ClassTimeConfig? startSlot;
+        ClassTimeConfig? endSlot;
+        for (final slot in times) {
+          if (startSlot == null &&
+              slot.firstPeriod <= course.startPeriod &&
+              slot.lastPeriod >= course.startPeriod) {
+            startSlot = slot;
+          }
+          if (slot.firstPeriod <= course.endPeriod &&
+              slot.lastPeriod >= course.endPeriod) {
+            endSlot = slot;
+          }
+        }
+        if (startSlot == null) continue;
+        final end = endSlot ?? startSlot;
+        final startAt = DateTime(today.year, today.month, today.day,
+            startSlot.startMinutes ~/ 60, startSlot.startMinutes % 60);
+        final endAt = DateTime(today.year, today.month, today.day,
+            end.endMinutes ~/ 60, end.endMinutes % 60);
+        final state = now.isBefore(startAt)
+            ? _CourseSlotState.upcoming
+            : now.isAfter(endAt)
+                ? _CourseSlotState.past
+                : _CourseSlotState.now;
+        courseSlots.add(_CourseSlot(
+            '${startSlot.startLabel} - ${end.endLabel}',
+            course.name,
+            course.location,
+            state));
+      }
+
       if (mounted) {
         setState(() => _brief = _TodayBrief(
               nextCourseName: nextCourse?.name,
@@ -2971,6 +3191,7 @@ class _TodoHomePageState extends State<TodoHomePage>
               nextCourseStartLabel: nextStartLabel,
               nextCourseAt: nextAt,
               courseCountToday: courses.length,
+              coursesToday: courseSlots,
               focusMinutes: focus.totalSeconds ~/ 60,
               dietCount: dietCount,
               expenseTodayCents: expenseCents,
@@ -3266,72 +3487,6 @@ class _GlassIconCircle extends StatelessWidget {
   }
 }
 
-/// 选项胶囊：任务类型 / 分类的轻量选择器（替代默认 ChoiceChip）
-class _OptionChip extends StatelessWidget {
-  final String label;
-  final bool selected;
-  final bool onDark;
-  final VoidCallback onTap;
-
-  const _OptionChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.onDark = true,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        curve: Curves.easeOutCubic,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7.5),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(999),
-          gradient: selected
-              ? LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.actionFill.withValues(alpha: onDark ? .28 : 1),
-                    AppColors.actionFillDeep
-                        .withValues(alpha: onDark ? .14 : .55),
-                  ],
-                )
-              : null,
-          color: selected
-              ? null
-              : (onDark
-                  ? Colors.white.withValues(alpha: .08)
-                  : Colors.white.withValues(alpha: .65)),
-          border: Border.all(
-            color: selected
-                ? (onDark
-                    ? Colors.white.withValues(alpha: .34)
-                    : AppColors.actionFillDeep.withValues(alpha: .70))
-                : (onDark ? Colors.white.withValues(alpha: .16) : Colors.white),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontFamily: AppTypography.sans,
-            fontSize: 12.5,
-            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-            color: selected
-                ? (onDark ? AppColors.actionFill : AppColors.actionInk)
-                : (onDark
-                    ? Colors.white.withValues(alpha: .78)
-                    : AppColors.muted),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 // 任务类型选择按钮
 class _TaskTypeButton extends StatelessWidget {
   final TaskType type;
@@ -3441,7 +3596,9 @@ class _TodoListItem extends StatelessWidget {
       TaskCategory.life => onDark ? const Color(0xFFE7D9C5) : AppColors.olive,
       TaskCategory.work => onDark ? const Color(0xFFD1D7E0) : AppColors.slate,
     };
-    return Column(children: [
+    // 列表项绘制隔离：滚动/勾选时只重绘该行
+    return RepaintBoundary(
+      child: Column(children: [
       Material(
         color: Colors.transparent,
         child: InkWell(
@@ -3571,7 +3728,7 @@ class _TodoListItem extends StatelessWidget {
         ),
       ),
       const SizedBox(height: 3),
-    ]);
+    ]));
   }
 }
 
@@ -5050,12 +5207,24 @@ class _CategoryButton extends StatelessWidget {
 
 // ==================== 今日仪表盘数据 ====================
 
+enum _CourseSlotState { past, now, upcoming }
+
+/// 今日一节课的展示条目（时间已从节次映射为钟点）
+class _CourseSlot {
+  const _CourseSlot(this.timeLabel, this.name, this.room, this.state);
+  final String timeLabel;
+  final String name;
+  final String room;
+  final _CourseSlotState state;
+}
+
 class _TodayBrief {
   final String? nextCourseName;
   final String? nextCourseLocation;
   final String? nextCourseStartLabel;
   final DateTime? nextCourseAt;
   final int courseCountToday;
+  final List<_CourseSlot> coursesToday;
   final int focusMinutes;
   final int dietCount;
   final int expenseTodayCents;
@@ -5068,6 +5237,7 @@ class _TodayBrief {
     this.nextCourseStartLabel,
     this.nextCourseAt,
     required this.courseCountToday,
+    this.coursesToday = const [],
     required this.focusMinutes,
     required this.dietCount,
     required this.expenseTodayCents,
