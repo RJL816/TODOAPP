@@ -152,3 +152,6 @@ flutter_*.log
 
 # 推广截图素材（本地素材，体积大，不入库）
 promo_screens/
+
+# local installer build artifacts
+scripts/dist/
