@@ -593,7 +593,7 @@ class _TodoHomePageState extends State<TodoHomePage>
           items: [
             MenuItem(key: 'show', label: '显示主窗口'),
             MenuItem.separator(),
-            MenuItem(key: 'exit', label: '退出（提醒将不可用）'),
+            MenuItem(key: 'exit', label: '退出后台进程（提醒将不可用）'),
           ],
         );
         await trayManager.setContextMenu(menu);
@@ -753,7 +753,8 @@ class _TodoHomePageState extends State<TodoHomePage>
 
   @override
   void onTrayIconRightMouseDown() {
-    // 右键弹出托盘菜单（tray_manager 自动处理）
+    // tray_manager 在 Windows 上不会自动弹出菜单，需要显式弹出
+    trayManager.popUpContextMenu();
   }
 
   @override
