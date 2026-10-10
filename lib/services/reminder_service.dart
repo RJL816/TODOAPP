@@ -485,12 +485,11 @@ class ReminderService {
     try {
       final dir = await getApplicationSupportDirectory();
       final iconFile = File('${dir.path}/tray_icon.ico');
-      if (!await iconFile.exists()) {
-        final data = await rootBundle.load('assets/tray_icon.ico');
-        await iconFile.writeAsBytes(
-            data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
-            flush: true);
-      }
+      // 每次启动都覆盖写入：应用升级后托盘图标随之更新
+      final data = await rootBundle.load('assets/tray_icon.ico');
+      await iconFile.writeAsBytes(
+          data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes),
+          flush: true);
       return iconFile.path;
     } catch (e) {
       debugPrint('托盘图标准备失败: $e');

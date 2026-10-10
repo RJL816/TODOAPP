@@ -4,7 +4,7 @@
 
 #define MyAppName "学习桌"
 #define MyAppNameEn "TodoApp"
-#define MyAppVersion "1.0.1"
+#define MyAppVersion "1.0.2"
 #define MyAppPublisher "RJL816"
 #define MyAppExeName "todo_app.exe"
 #define MyAppURL "https://github.com/RJL816/TODOAPP"
@@ -49,4 +49,5 @@ Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall skipifsilent
+; 静默更新安装完成后也自动启动新版本（应用内一键更新依赖此行为）
+Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#MyAppName}}"; Flags: nowait postinstall

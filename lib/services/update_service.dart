@@ -1,9 +1,11 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 
 /// 应用内检查更新：读取 GitHub Releases 最新版本，与当前版本比对。
-/// Windows 资产匹配 .zip，Android 匹配 .apk；找不到资产时回退发布页。
+/// Windows 资产优先匹配安装器 -setup.exe，回退 .zip；Android 匹配 .apk。
 class UpdateService {
   static UpdateService? _instance;
   static UpdateService get instance {
@@ -72,7 +74,7 @@ class UpdateService {
       version: tag.startsWith('v') ? tag.substring(1) : tag,
       notes: data['body']?.toString() ?? '',
       pageUrl: data['html_url']?.toString() ?? releasesPage,
-      windowsUrl: _findAsset(assets, ['.zip']),
+      windowsUrl: _findAsset(assets, ['-setup.exe', '.zip']),
       androidUrl: _findAsset(assets, ['.apk']),
     );
   }
@@ -84,6 +86,43 @@ class UpdateService {
       }
     }
     return null;
+  }
+
+  /// 下载 Windows 安装器到临时目录，[onProgress] 回调 0.0–1.0。
+  /// 成功返回本地文件路径，供静默安装。
+  Future<String> downloadWindowsSetup(
+    ReleaseInfo release, {
+    void Function(double progress)? onProgress,
+    http.Client? client,
+  }) async {
+    final url = release.windowsUrl;
+    if (url == null) throw Exception('该版本没有 Windows 安装包');
+    final request = http.Request('GET', Uri.parse(url));
+    final response = await (client ?? http.Client())
+        .send(request)
+        .timeout(const Duration(seconds: 60));
+    if (response.statusCode != 200) {
+      throw Exception('下载失败（HTTP ${response.statusCode}）');
+    }
+    final total = response.contentLength ?? 0;
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}\\todo_app_update_setup.exe');
+    final sink = file.openSync(mode: FileMode.write);
+    var received = 0;
+    try {
+      await for (final chunk in response.stream) {
+        sink.writeFromSync(chunk);
+        received += chunk.length;
+        if (total > 0) onProgress?.call((received / total).clamp(0.0, 1.0));
+      }
+    } finally {
+      await sink.close();
+    }
+    if (total > 0 && received < total) {
+      throw Exception('下载不完整（$received / $total 字节）');
+    }
+    onProgress?.call(1.0);
+    return file.path;
   }
 }
 

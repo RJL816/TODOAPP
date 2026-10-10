@@ -55,6 +55,7 @@ import 'ui/app_theme.dart';
 import 'ui/ambient_backdrop.dart';
 import 'ui/ambient_palette.dart';
 import 'ui/ambient_reading_theme.dart';
+import 'ui/in_app_updater.dart';
 import 'ui/window_class.dart';
 import 'ui/glass_panel.dart';
 import 'ui/page_frame.dart';
@@ -354,11 +355,10 @@ class _TodoHomePageState extends State<TodoHomePage>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           duration: const Duration(seconds: 8),
-          content: Text('发现新版本 v${release.version}，可前往设置-关于与更新下载'),
+          content: Text('发现新版本 v${release.version}，可一键更新'),
           action: SnackBarAction(
-              label: '前往下载',
-              onPressed: () => launchUrl(Uri.parse(release.pageUrl),
-                  mode: LaunchMode.externalApplication),
+              label: '一键更新',
+              onPressed: () => runInAppUpdate(context, release),
             ),
         ));
       }
@@ -4062,9 +4062,15 @@ class _SettingsDialogState extends State<_SettingsDialog> {
                   ],
                   const SizedBox(height: 8),
                   FilledButton.icon(
-                    onPressed: _openDownload,
+                    onPressed: (Platform.isWindows &&
+                            _newRelease!.hasWindowsDownload)
+                        ? () => runInAppUpdate(context, _newRelease!)
+                        : _openDownload,
                     icon: const Icon(Icons.download_rounded, size: 18),
-                    label: const Text('前往下载'),
+                    label: Text(Platform.isWindows &&
+                            _newRelease!.hasWindowsDownload
+                        ? '下载并安装'
+                        : '前往下载'),
                   ),
                 ]),
           ),
