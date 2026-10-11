@@ -618,7 +618,9 @@ class _ExpenseEditorState extends State<_ExpenseEditor> {
                   ])),
               const SizedBox(height: 8),
               DropdownButtonFormField<ExpenseKind>(
-                  dropdownColor: Theme.of(context).canvasColor,
+                  dropdownColor: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xF21B2730)
+                      : AppColors.paper,
                   initialValue: _kind,
                   decoration: const InputDecoration(labelText: '类型'),
                   items: expenseKinds.entries
@@ -627,7 +629,9 @@ class _ExpenseEditorState extends State<_ExpenseEditor> {
                       .toList(),
                   onChanged: (v) => setState(() => _kind = v!)),
               DropdownButtonFormField<String>(
-                  dropdownColor: Theme.of(context).canvasColor,
+                  dropdownColor: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xF21B2730)
+                      : AppColors.paper,
                   key: ValueKey(_category),
                   initialValue:
                       expenseCategories.contains(_category) ? _category : '其他',
@@ -747,7 +751,9 @@ class _ImportPreviewState extends State<_ImportPreview> {
                                                       width: 130,
                                                       child: DropdownButtonFormField<
                                                               ExpenseKind>(
-                                                          dropdownColor: Theme.of(context).canvasColor,
+                                                          dropdownColor: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xF21B2730)
+                      : AppColors.paper,
                                                           initialValue: e.kind,
                                                           isExpanded: true,
                                                           decoration:
@@ -779,7 +785,9 @@ class _ImportPreviewState extends State<_ImportPreview> {
                                                       width: 130,
                                                       child: DropdownButtonFormField<
                                                               String>(
-                                                          dropdownColor: Theme.of(context).canvasColor,
+                                                          dropdownColor: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xF21B2730)
+                      : AppColors.paper,
                                                           initialValue:
                                                               expenseCategories
                                                                       .contains(e

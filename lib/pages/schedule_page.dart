@@ -1700,7 +1700,9 @@ class _CourseEditDialogState extends State<_CourseEditDialog> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      dropdownColor: Theme.of(context).canvasColor,
+                      dropdownColor: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xF21B2730)
+                        : AppColors.paper,
                       initialValue: _weekday,
                       decoration: const InputDecoration(
                         labelText: '星期',
@@ -1717,7 +1719,9 @@ class _CourseEditDialogState extends State<_CourseEditDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      dropdownColor: Theme.of(context).canvasColor,
+                      dropdownColor: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xF21B2730)
+                        : AppColors.paper,
                       initialValue: _startPeriod,
                       decoration: const InputDecoration(
                         labelText: '开始节次',
@@ -1734,7 +1738,9 @@ class _CourseEditDialogState extends State<_CourseEditDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      dropdownColor: Theme.of(context).canvasColor,
+                      dropdownColor: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xF21B2730)
+                        : AppColors.paper,
                       initialValue: _endPeriod,
                       decoration: const InputDecoration(
                         labelText: '结束节次',
@@ -2563,7 +2569,9 @@ class _ExamEditDialogState extends State<_ExamEditDialog> {
                   SizedBox(
                     width: 120,
                     child: DropdownButtonFormField<int>(
-                      dropdownColor: Theme.of(context).canvasColor,
+                      dropdownColor: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xF21B2730)
+                        : AppColors.paper,
                       value: _durationMinutes,
                       decoration: const InputDecoration(
                         labelText: '时长',
