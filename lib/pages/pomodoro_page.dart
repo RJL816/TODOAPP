@@ -1021,18 +1021,28 @@ class _PomodoroPageState extends State<PomodoroPage> {
     const white = Color(0xFFF9F7F2);
     final palette =
         AmbientPaletteScope.maybeOf(context)?.palette ?? AmbientPalette.night;
+    final stopwatch = _svc.isStopwatchFocus ||
+        (!_svc.isRunning &&
+            !_svc.isPaused &&
+            _svc.stopwatchMode); // 空闲占位也跟随所选模式
     final remaining = _svc.remainingSeconds();
     final planned = _svc.currentPlannedSeconds();
-    final progress =
-        planned > 0 ? (1 - remaining / planned).clamp(0.0, 1.0) : 0.0;
+    final elapsed = _svc.elapsedSeconds();
+    // 正计时：以设定的专注时长为一圈循环，环每圈重新走；数字持续累加
+    final progress = stopwatch
+        ? (planned > 0 ? (elapsed % planned) / planned : 0.0)
+        : (planned > 0 ? (1 - remaining / planned).clamp(0.0, 1.0) : 0.0);
     final time = _svc.isRunning || _svc.isPaused
-        ? _formatRemaining(remaining)
-        : '${_svc.focusMinutes.toString().padLeft(2, '0')}:00';
+        ? (stopwatch ? _formatRemaining(elapsed) : _formatRemaining(remaining))
+        : (stopwatch
+            ? '00:00'
+            : '${_svc.focusMinutes.toString().padLeft(2, '0')}:00');
     final active = _svc.isRunning || _svc.isPaused;
     final end =
         _svc.targetEndTime ?? DateTime.now().add(Duration(seconds: remaining));
-    final endLabel =
-        '预计 ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')} 结束';
+    final endLabel = stopwatch
+        ? '正计时 · 结束时按实际时长记录'
+        : '预计 ${end.hour.toString().padLeft(2, '0')}:${end.minute.toString().padLeft(2, '0')} 结束';
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -1119,6 +1129,23 @@ class _PomodoroPageState extends State<PomodoroPage> {
           SizedBox(height: short ? 10 : 29),
           if (!_isImmersive) _buildTaskLink(),
           SizedBox(height: short ? 10 : 20),
+          // 计时模式切换：倒计时 / 正计时（空闲时才可切换）
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: white.withValues(alpha: 0.10),
+              ),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [
+                _modePill('倒计时', !_svc.stopwatchMode,
+                    () => _svc.setStopwatchMode(false)),
+                _modePill('正计时', _svc.stopwatchMode,
+                    () => _svc.setStopwatchMode(true)),
+              ]),
+            ),
+          ),
+          SizedBox(height: short ? 10 : 14),
           _buildControls(theme),
           SizedBox(height: short ? 8 : 14),
           Text('今天已投入 ${_todayStats.minutes} 分钟',
@@ -1130,8 +1157,33 @@ class _PomodoroPageState extends State<PomodoroPage> {
     );
   }
 
-  Widget _buildTaskLink() {
-    const white = Color(0xFFF9F7F2);
+  /// 计时模式切换胶囊
+  Widget _modePill(String label, bool selected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: _svc.isRunning || _svc.isPaused ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          color: selected
+              ? const Color(0xFFF9F7F2)
+              : Colors.transparent,
+        ),
+        child: Text(label,
+            style: TextStyle(
+              fontFamily: AppTypography.sans,
+              fontSize: 12.5,
+              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+              color: selected
+                  ? AppColors.ink
+                  : const Color(0xFFF9F7F2).withValues(alpha: 0.66),
+            )),
+      ),
+    );
+  }
+
+  Widget _buildTaskLink() {    const white = Color(0xFFF9F7F2);
     TodoItem? linked;
     for (final todo in _todayTodos) {
       if (todo.id == _svc.associatedTodoId) {

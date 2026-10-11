@@ -226,6 +226,50 @@ void main() {
       expect(stats.minutes, 25);
     });
   });
+
+  group('正计时模式', () {
+    test('正计时专注：无目标时刻，elapsed 随时钟推进', () async {
+      final svc = await newService();
+      await svc.setStopwatchMode(true);
+      await svc.startPhase(PomodoroRunPhase.focus);
+      expect(svc.targetEndTime, isNull, reason: '正计时不应有结束时刻');
+      expect(svc.isRunning, isTrue);
+      expect(svc.elapsedSeconds(), 0);
+      clock.advance(const Duration(seconds: 90));
+      expect(svc.elapsedSeconds(), 90);
+      expect(svc.remainingSeconds(), 0);
+    });
+
+    test('正计时暂停/继续：冻结后从冻结处继续累计', () async {
+      final svc = await newService();
+      await svc.setStopwatchMode(true);
+      await svc.startPhase(PomodoroRunPhase.focus);
+      clock.advance(const Duration(seconds: 120));
+      await svc.pause();
+      expect(svc.elapsedSeconds(), 120);
+      clock.advance(const Duration(seconds: 60));
+      expect(svc.elapsedSeconds(), 120, reason: '暂停期间不累计');
+      await svc.resume();
+      clock.advance(const Duration(seconds: 30));
+      expect(svc.elapsedSeconds(), 150);
+    });
+
+    test('正计时完成：按实际时长记录会话', () async {
+      final svc = await newService();
+      await svc.setStopwatchMode(true);
+      await svc.startPhase(PomodoroRunPhase.focus);
+      clock.advance(const Duration(seconds: 17 * 60));
+      await svc.finishCurrentFocus();
+      expect(svc.runningPhase, isNull);
+      final sessions = await IsarService.instance.isar.pomodoroSessions
+          .filter()
+          .typeEqualTo(PomodoroPhaseType.focus)
+          .completedEqualTo(true)
+          .findAll();
+      expect(sessions.length, 1);
+      expect(sessions.first.durationSeconds, 17 * 60);
+    });
+  });
 }
 
 /// 可推进的测试时钟
@@ -234,3 +278,4 @@ class _Clock {
   _Clock(this.now);
   void advance(Duration d) => now = now.add(d);
 }
+

@@ -3,9 +3,13 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:isar/isar.dart';
 import 'package:window_manager/window_manager.dart';
 
+import '../models/pomodoro_session.dart';
+import '../models/todo_item.dart';
 import '../services/focus_analytics_service.dart';
+import '../services/isar_service.dart';
 import '../ui/ambient_backdrop.dart';
 import '../ui/app_theme.dart';
 import '../ui/glass_panel.dart';
@@ -26,6 +30,39 @@ class FocusInsightsPage extends StatefulWidget {
 class _FocusInsightsPageState extends State<FocusInsightsPage> {
   DateTime _day = DateTime.now();
   late Future<FocusDayStats> _stats = FocusAnalyticsService.forDay(_day);
+  late final Future<List<({String habit, int seconds})>> _habitTotals =
+      _loadHabitTotals();
+
+  /// 长久习惯的累计专注时长（全历史，按关联的习惯聚合）
+  Future<List<({String habit, int seconds})>> _loadHabitTotals() async {
+    try {
+      final isar = IsarService.instance.isar;
+      final sessions = await isar.pomodoroSessions
+          .filter()
+          .typeEqualTo(PomodoroPhaseType.focus)
+          .completedEqualTo(true)
+          .findAll();
+      final recurring = await isar.todoItems
+          .filter()
+          .taskTypeEqualTo(TaskType.recurring)
+          .findAll();
+      final recurringIds = recurring.map((t) => t.id).toSet();
+      final totals = <String, int>{};
+      for (final s in sessions) {
+        if (s.todoId == null || !recurringIds.contains(s.todoId)) continue;
+        final title =
+            (s.taskTitle?.isNotEmpty == true) ? s.taskTitle! : '未命名习惯';
+        totals[title] = (totals[title] ?? 0) + s.durationSeconds;
+      }
+      final entries = totals.entries
+          .map((e) => (habit: e.key, seconds: e.value))
+          .toList()
+        ..sort((a, b) => b.seconds.compareTo(a.seconds));
+      return entries.take(8).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
 
   void _move(int days) {
     final next = _day.add(Duration(days: days));
@@ -281,6 +318,8 @@ class _FocusInsightsPageState extends State<FocusInsightsPage> {
                                             alpha: .72),
                                         shadows: _sceneShadow)),
                               ],
+                              const SizedBox(height: 34),
+                              _buildHabitTotals(theme),
                             ]),
                       )),
                     ]);
@@ -302,6 +341,85 @@ class _FocusInsightsPageState extends State<FocusInsightsPage> {
               style: AppType.display(size: 26, color: _insightWhite)),
         ]),
       ]);
+
+  /// 长久习惯 · 累计专注：全历史按习惯聚合的横向条形排行
+  Widget _buildHabitTotals(ThemeData theme) {
+    return FutureBuilder<List<({String habit, int seconds})>>(
+        future: _habitTotals,
+        builder: (context, snapshot) {
+          final rows = snapshot.data ?? const <({String habit, int seconds})>[];
+          if (rows.isEmpty) return const SizedBox.shrink();
+          final total = rows.fold<int>(0, (sum, r) => sum + r.seconds);
+          return GlassPanel(
+            level: GlassSurfaceLevel.dark,
+            opacity: .58,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(children: [
+                      const Icon(Icons.all_inclusive,
+                          size: 18, color: _focusAccent),
+                      const SizedBox(width: 9),
+                      Text('长久习惯 · 累计专注',
+                          style: theme.textTheme.titleMedium
+                              ?.copyWith(color: _insightWhite)),
+                      const Spacer(),
+                      Text(_duration(total),
+                          style: AppType.display(
+                              size: 20, color: _insightWhite)),
+                    ]),
+                    const SizedBox(height: 16),
+                    for (var i = 0; i < rows.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 13),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(children: [
+                                Expanded(
+                                    child: Text(rows[i].habit,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                                color: _insightWhite,
+                                                fontWeight:
+                                                    FontWeight.w600))),
+                                const SizedBox(width: 12),
+                                Text(_duration(rows[i].seconds),
+                                    style: theme.textTheme.bodyMedium
+                                        ?.copyWith(
+                                            color: _insightWhite,
+                                            fontWeight: FontWeight.w700)),
+                              ]),
+                              const SizedBox(height: 6),
+                              ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(999),
+                                child: LinearProgressIndicator(
+                                  value: total > 0
+                                      ? rows[i].seconds / total
+                                      : 0,
+                                  minHeight: 5,
+                                  valueColor: const AlwaysStoppedAnimation<
+                                          Color>(Color(0xFF92BBC2)),
+                                  backgroundColor: _insightWhite
+                                      .withValues(alpha: .14),
+                                ),
+                              ),
+                            ]),
+                      ),
+                    const SizedBox(height: 4),
+                    Text('只统计关联到长久习惯的已完成专注；条长为占总时长的比例。',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                            color: _insightWhite.withValues(alpha: .68))),
+                  ]),
+            ),
+          );
+        });
+  }
 }
 
 String _duration(int seconds) {
