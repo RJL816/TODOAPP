@@ -114,7 +114,11 @@ class _FocusInsightsPageState extends State<FocusInsightsPage> {
       ),
       body: Stack(
         children: [
-          const Positioned.fill(child: AmbientBackdrop()),
+          // 与首页一致：背景按当前时刻自动切换场景
+          Positioned.fill(
+              child: AmbientBackdrop(
+                  sceneIndex: AmbientBackdrop.sceneForHour(
+                      DateTime.now().hour))),
           FutureBuilder<FocusDayStats>(
               future: _stats,
               builder: (context, snapshot) {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
@@ -461,15 +462,18 @@ class _PomodoroPageState extends State<PomodoroPage> {
     final controller = TextEditingController();
     final picked = await showDialog<({int? id, String? title})>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) {
+        final bounds = MediaQuery.sizeOf(context);
+        return AlertDialog(
         title: const Text('这次专注做什么'),
         content: SizedBox(
-          width: 380,
-          height: 400,
+          // 平板/横屏自适应：宽度不超屏宽 88%，列表区不超可用高一半
+          width: math.min(420, bounds.width * .88),
+          height: math.min(400, bounds.height * .5),
           child: Column(children: [
             TextField(
                 controller: controller,
-                autofocus: true,
+                // 不自动聚焦：先浏览事项列表，点输入框时再弹键盘
                 decoration: const InputDecoration(
                     labelText: '新建一件专注事项', hintText: '例如 阅读论文、整理笔记'),
                 onSubmitted: (value) {
@@ -524,7 +528,8 @@ class _PomodoroPageState extends State<PomodoroPage> {
             child: const Text('取消'),
           ),
         ],
-      ),
+        );
+      },
     );
     controller.dispose();
     if (picked != null) {

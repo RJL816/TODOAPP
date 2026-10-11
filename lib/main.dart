@@ -2670,14 +2670,17 @@ class _TodoHomePageState extends State<TodoHomePage>
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(value,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppType.display(
-                size: 29,
-                weight: FontWeight.w600,
-                color: palette.primaryText,
-              ).copyWith(fontFeatures: AppType.tabular)),
+          // 大数字整体缩放适配列宽：平板窄列时单位不再被省略号截断
+          FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Text(value,
+                  maxLines: 1,
+                  style: AppType.display(
+                    size: 29,
+                    weight: FontWeight.w600,
+                    color: palette.primaryText,
+                  ).copyWith(fontFeatures: AppType.tabular))),
           const SizedBox(height: 4),
           Text(label,
               style: theme.textTheme.bodySmall
