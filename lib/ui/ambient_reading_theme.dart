@@ -39,7 +39,8 @@ class AmbientReadingTheme extends StatelessWidget {
       data: base.copyWith(
         colorScheme: scheme,
         iconTheme: IconThemeData(color: foreground),
-        canvasColor: Colors.transparent,
+        // 实底深墨蓝：下拉菜单底色取 canvasColor，透明会让菜单与照片重叠不可读
+        canvasColor: const Color(0xF21B2730),
         dividerColor: foreground.withValues(alpha: .18),
         textTheme: base.textTheme.apply(
           bodyColor: foreground,
