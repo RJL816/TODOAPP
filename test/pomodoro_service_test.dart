@@ -254,6 +254,21 @@ void main() {
       expect(svc.elapsedSeconds(), 150);
     });
 
+    test('正计时不会被 tick 误判为自然结束', () async {
+      final svc = await newService();
+      await svc.setStopwatchMode(true);
+      await svc.startPhase(PomodoroRunPhase.focus);
+      // 长时间推进 + 连续 tick（正计时不该触发自动完成）
+      for (var i = 0; i < 5; i++) {
+        clock.advance(const Duration(minutes: 30));
+        await svc.tick();
+      }
+      expect(svc.runningPhase, PomodoroRunPhase.focus,
+          reason: '正计时不限时长，不应被自动结束');
+      expect(svc.elapsedSeconds(), 150 * 60);
+      expect(svc.completionChoicePending, isFalse);
+    });
+
     test('正计时完成：按实际时长记录会话', () async {
       final svc = await newService();
       await svc.setStopwatchMode(true);

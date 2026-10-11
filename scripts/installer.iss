@@ -4,7 +4,7 @@
 
 #define MyAppName "学习桌"
 #define MyAppNameEn "TodoApp"
-#define MyAppVersion "1.0.4"
+#define MyAppVersion "1.0.5"
 #define MyAppPublisher "RJL816"
 #define MyAppExeName "todo_app.exe"
 #define MyAppURL "https://github.com/RJL816/TODOAPP"

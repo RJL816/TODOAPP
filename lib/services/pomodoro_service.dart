@@ -412,11 +412,12 @@ class PomodoroService extends ChangeNotifier {
     _ticker = null;
   }
 
-  /// 秒级 tick：只驱动 UI 刷新；到点则自然结束
+  /// 秒级 tick：只驱动 UI 刷新；到点则自然结束。
+  /// 正计时没有"到点"概念，永远不会自然结束，由用户主动完成。
   @visibleForTesting
   Future<void> tick() async {
     if (!isRunning) return;
-    if (remainingSeconds() <= 0) {
+    if (!_isStopwatchRunning && remainingSeconds() <= 0) {
       await _completeNaturally();
     } else {
       notifyListeners();
