@@ -1282,7 +1282,11 @@ class _PomodoroPageState extends State<PomodoroPage> {
       textStyle: theme.textTheme.titleSmall,
     );
     if (_svc.isRunning || _svc.isPaused) {
-      return Wrap(spacing: 14, runSpacing: 8, children: [
+      return Wrap(
+          spacing: 14,
+          runSpacing: 8,
+          alignment: WrapAlignment.center,
+          children: [
         FilledButton.icon(
           onPressed: _svc.isPaused ? _svc.resume : _svc.pause,
           icon: Icon(_svc.isPaused ? Icons.play_arrow : Icons.pause,
@@ -1301,7 +1305,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
         ),
       ]);
     }
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    return Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
       FilledButton.icon(
         onPressed: () => _svc.startPhase(PomodoroRunPhase.focus),
         icon: const Icon(Icons.play_arrow, color: AppColors.ink),
@@ -1310,7 +1314,10 @@ class _PomodoroPageState extends State<PomodoroPage> {
       ),
       if (_svc.suggestedNext != null) ...[
         const SizedBox(height: 10),
-        Wrap(spacing: 10, children: [
+        Wrap(
+            spacing: 10,
+            alignment: WrapAlignment.center,
+            children: [
           TextButton.icon(
             onPressed: () => _svc.startPhase(_svc.suggestedNext!),
             icon: const Icon(Icons.self_improvement, size: 18),
