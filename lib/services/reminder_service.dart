@@ -1,4 +1,5 @@
 import 'dart:async';
+import '../app_identity.dart';
 import 'dart:convert';
 import 'dart:io';
 
@@ -116,7 +117,7 @@ class ReminderService {
         _onNotificationResponse(launch!.notificationResponse!);
       }
     } else if (Platform.isWindows) {
-      await _localNotifier.setup(appName: '待办事项');
+      await _localNotifier.setup(appName: AppIdentity.fullName);
       _notificationsAllowed = true;
       _exactAllowed = true; // 进程内定时器即精确
       _timezoneOk = true;

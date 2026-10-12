@@ -1,7 +1,7 @@
 name: todo_app
 description: A simple To-Do List application for Windows
 publish_to: 'none'
-version: 1.0.9+10
+version: 1.0.10+11
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -52,6 +52,7 @@ dependencies:
   tray_manager: 0.5.3
   http: ^1.6.0
   package_info_plus: ^9.0.1
+  geolocator: ^14.0.1
 
 dev_dependencies:
   flutter_test:
@@ -71,22 +72,16 @@ flutter_launcher_icons:
   windows:
     generate: true
     icon_size: 256
-  image_path: "app_icon.png"
-  adaptive_icon_background: "#FFFFFF"
-  adaptive_icon_foreground: "app_icon_foreground.png"
+  image_path: "assets/branding/dayloom_icon.png"
+  adaptive_icon_background: "#F6F0E5"
+  adaptive_icon_foreground: "assets/branding/dayloom_icon.png"
 
 flutter:
   uses-material-design: true
   assets:
     - assets/sounds/
     - assets/tray_icon.ico
-    - assets/backgrounds/study_room.png
-    - assets/backgrounds/daily_study.png
-    - assets/backgrounds/daylight_study_final.png
-    - assets/backgrounds/alpine_noon.png
-    - assets/backgrounds/alpine_dawn.png
-    - assets/backgrounds/alpine_dusk.png
-    - assets/backgrounds/alpine_night.png
+    - assets/backgrounds/
     - background1.png
     - background2.png
     - background3.png

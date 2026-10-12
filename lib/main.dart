@@ -32,6 +32,10 @@ import 'services/training_service.dart';
 import 'services/diet_service.dart';
 import 'services/ai_service.dart';
 import 'services/update_service.dart';
+import 'services/weather_background_service.dart';
+import 'ui/weather_settings_section.dart';
+import 'ui/focus_overlay_settings_section.dart';
+import 'app_identity.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'ui/ai_assistant.dart';
 import 'ui/ai_settings_section.dart';
@@ -250,7 +254,7 @@ class TodoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '学习桌',
+      title: AppIdentity.fullName,
       scrollBehavior: const GlassScrollBehavior(),
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
@@ -330,6 +334,7 @@ class _TodoHomePageState extends State<TodoHomePage>
   int _ambientSceneRequest = 0;
   int _lastAutoSceneIndex = AmbientBackdrop.sceneForHour(DateTime.now().hour);
   Timer? _ambientClockTimer;
+  final _weather = WeatherBackgroundService.instance;
   String? _ambientCustomPath;
   double _ambientShade = .10;
 
@@ -421,8 +426,14 @@ class _TodoHomePageState extends State<TodoHomePage>
       });
     }
     _loadAiConfig();
+    _weather.addListener(_onWeatherChanged);
+    _loadWeatherBackground();
     _ambientClockTimer = Timer.periodic(const Duration(minutes: 1), (_) async {
-      if (!_ambientSceneAuto || !mounted) return;
+      if (!mounted) return;
+      if (_showAmbientBackground && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+        unawaited(_weather.refresh());
+      }
+      if (!_ambientSceneAuto) return;
       final scene = AmbientBackdrop.sceneForHour(DateTime.now().hour);
       if (scene != _lastAutoSceneIndex) {
         await _precacheAmbientScene(scene);
@@ -432,6 +443,18 @@ class _TodoHomePageState extends State<TodoHomePage>
       }
     });
     _initTrayAndNavigation();
+  }
+
+  Future<void> _loadWeatherBackground() async {
+    await _weather.init();
+    if (mounted && _showAmbientBackground) await _weather.refresh();
+  }
+
+  void _onWeatherChanged() {
+    if (!mounted) return;
+    _precacheAmbientScene(_effectiveAmbientSceneIndex).then((_) {
+      if (mounted) setState(() {});
+    });
   }
 
   Future<void> _loadAiConfig() async {
@@ -519,7 +542,7 @@ class _TodoHomePageState extends State<TodoHomePage>
     if (index < 0 || index >= AmbientBackdrop.sceneAssets.length) return;
     try {
       await precacheImage(
-          AssetImage(AmbientBackdrop.sceneAssets[index]), context);
+          AssetImage(AmbientBackdrop.sceneAsset(index, _weather.mood)), context);
     } catch (_) {
       // A failed prefetch should not prevent selecting the background.
     }
@@ -591,7 +614,7 @@ class _TodoHomePageState extends State<TodoHomePage>
       if (iconPath != null) {
         trayManager.addListener(this);
         await trayManager.setIcon(iconPath);
-        await trayManager.setToolTip('待办事项（关闭后驻留托盘，提醒继续可用）');
+        await trayManager.setToolTip('${AppIdentity.fullName}（关闭后驻留托盘，提醒继续可用）');
         final menu = Menu(
           items: [
             MenuItem(key: 'show', label: '显示主窗口'),
@@ -704,6 +727,7 @@ class _TodoHomePageState extends State<TodoHomePage>
   @override
   void dispose() {
     _ambientClockTimer?.cancel();
+    _weather.removeListener(_onWeatherChanged);
     _updateCheckTimer?.cancel();
     windowManager.removeListener(this);
     if (Platform.isWindows) {
@@ -1136,6 +1160,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                                       child: const MemoPage(),
                                     )),
                                 PomodoroPage(
+                                  onOpenAppSettings: _showSettingsDialog,
                                   onExit: () => _navigateTo(0),
                                   onOpenTodo: () => _navigateTo(0),
                                   focusImmersive: _focusImmersive,
@@ -1252,6 +1277,7 @@ class _TodoHomePageState extends State<TodoHomePage>
       customPath: _ambientCustomPath,
       customPortraitX: _ambientCustomPortraitX,
       shade: _ambientShade,
+      weather: _weather.mood,
     );
   }
 
@@ -1604,7 +1630,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                         ),
                       ),
                       const SizedBox(width: 10),
-                      Text('学习桌',
+                      Text(AppIdentity.name,
                           style: AppType.editorial(
                               size: 17,
                               weight: FontWeight.w600,
@@ -4228,6 +4254,7 @@ class _SettingsDialogState extends State<_SettingsDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (Platform.isAndroid) const FocusOverlaySettingsSection(),
           // AI 助手配置
           _aiSection(theme),
           const SizedBox(height: 6),
@@ -4370,6 +4397,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               ),
             ]),
             const SizedBox(height: 6),
+            const WeatherSettingsSection(),
+            const SizedBox(height: 12),
             Text('随时间：05–09 日出 · 09–17 午后 · 17–20 晚霞 · 20–05 夜色。',
                 style: theme.textTheme.bodySmall),
             const SizedBox(height: 12),

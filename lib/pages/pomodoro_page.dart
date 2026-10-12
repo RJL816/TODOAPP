@@ -14,7 +14,6 @@ import '../models/todo_item.dart';
 import '../services/isar_service.dart';
 import '../services/focus_analytics_service.dart';
 import '../services/pomodoro_service.dart';
-import '../services/reminder_service.dart';
 import '../ui/app_theme.dart';
 import '../ui/ambient_backdrop.dart';
 import '../ui/ambient_palette.dart';
@@ -24,6 +23,7 @@ import 'focus_insights_page.dart';
 /// 番茄钟页面：进度环 + 沉浸模式
 class PomodoroPage extends StatefulWidget {
   final VoidCallback? onExit;
+  final VoidCallback? onOpenAppSettings;
   final VoidCallback? onOpenTodo;
   final bool? focusImmersive;
   final Future<void> Function(bool)? onFocusImmersiveChanged;
@@ -35,6 +35,7 @@ class PomodoroPage extends StatefulWidget {
   const PomodoroPage({
     super.key,
     this.onExit,
+    this.onOpenAppSettings,
     this.onOpenTodo,
     this.focusImmersive,
     this.onFocusImmersiveChanged,
@@ -546,103 +547,44 @@ class _PomodoroPageState extends State<PomodoroPage> {
     final longCtrl = TextEditingController(text: '${_svc.longBreakMinutes}');
     final intervalCtrl =
         TextEditingController(text: '${_svc.longBreakInterval}');
-
-    var overlayEnabled = _svc.focusOverlayEnabled;
-    final saved = await showDialog<bool>(
+    var openGlobalSettings = false;
+    final route = DialogRoute<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('番茄钟设置'),
-        content: SizedBox(
+        title: const Text('计时时长'),
+        content: SingleChildScrollView(
+            child: SizedBox(
           width: 340,
-          child: SingleChildScrollView(
-              child: StatefulBuilder(builder: (context, setDialogState) {
-            return Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _durationField(focusCtrl, '专注时长（分钟）'),
-                _durationField(shortCtrl, '短休息（分钟）'),
-                _durationField(longCtrl, '长休息（分钟）'),
-                _durationField(intervalCtrl, '每几个番茄进入长休息'),
-                if (Platform.isAndroid) ...[
-                  const Divider(),
-                  const Text(
-                      '计时会显示在通知栏和锁屏，到点发送提醒。'
-                      '开启通知与“闹钟和提醒”权限，可提高后台提醒的及时性。',
-                      style: TextStyle(fontSize: 12)),
-                  TextButton.icon(
-                    icon: const Icon(Icons.notifications_outlined),
-                    label: const Text('通知与到点提醒设置'),
-                    onPressed: () async {
-                      final reminders = ReminderService.instance;
-                      if (!await reminders.notificationsEnabled()) {
-                        await reminders.requestNotificationPermission();
-                      }
-                      if (!await reminders.exactAlarmsEnabled()) {
-                        await reminders.requestExactAlarmsPermission();
-                      }
-                      if (!context.mounted) return;
-                      await const MethodChannel('com.todo.app/focus_overlay')
-                          .invokeMethod('openFocusNotificationSettings');
-                    },
-                  ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.battery_charging_full),
-                    label: const Text('后台运行设置'),
-                    onPressed: () async {
-                      await const MethodChannel('com.todo.app/focus_overlay')
-                          .invokeMethod('openFocusBackgroundSettings');
-                    },
-                  ),
-                  const Text(
-                      '若锁屏后提醒延迟，可在应用系统设置中允许后台运行；'
-                      '勿扰模式或关闭通知弹窗时，系统可能只保留通知。',
-                      style: TextStyle(fontSize: 12)),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('专注悬浮窗'),
-                    subtitle: Text(overlayEnabled
-                        ? '专注与休息时显示计时，可拖动、点击返回'
-                        : '可选；关闭后仍显示通知栏计时'),
-                    value: overlayEnabled,
-                    onChanged: (v) async {
-                      if (v) {
-                        const channel =
-                            MethodChannel('com.todo.app/focus_overlay');
-                        final can =
-                            await channel.invokeMethod<bool>('canDrawOverlays');
-                        if (can != true) {
-                          await channel
-                              .invokeMethod('openOverlayPermissionSettings');
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                    content: Text('请授予"显示在其他应用上层"权限后返回再开启')));
-                          }
-                          return;
-                        }
-                      }
-                      setDialogState(() => overlayEnabled = v);
-                      await _svc.setFocusOverlayEnabled(v);
-                    },
-                  ),
-                ],
-              ],
-            );
-          })),
-        ),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            _durationField(focusCtrl, '专注时长（分钟）'),
+            _durationField(shortCtrl, '短休息（分钟）'),
+            _durationField(longCtrl, '长休息（分钟）'),
+            _durationField(intervalCtrl, '每几个番茄进入长休息'),
+            if (Platform.isAndroid)
+              TextButton.icon(
+                onPressed: widget.onOpenAppSettings == null
+                    ? null
+                    : () {
+                        openGlobalSettings = true;
+                        Navigator.pop(context, false);
+                      },
+                icon: const Icon(Icons.watch_later_outlined),
+                label: const Text('前往主设置：悬浮钟表与提醒'),
+              ),
+          ]),
+        )),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消')),
           TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('保存'),
-          ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('保存')),
         ],
       ),
     );
-
+    final saved = await Navigator.of(context).push(route);
+    await route.completed;
     if (saved == true) {
       await _svc.saveDurations(
         focus: int.tryParse(focusCtrl.text.trim()) ?? 25,
@@ -655,6 +597,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
     shortCtrl.dispose();
     longCtrl.dispose();
     intervalCtrl.dispose();
+    if (openGlobalSettings && mounted) widget.onOpenAppSettings?.call();
   }
 
   Widget _durationField(TextEditingController controller, String label) {
@@ -1241,9 +1184,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
         padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 7),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
-          color: selected
-              ? const Color(0xFFF9F7F2)
-              : Colors.transparent,
+          color: selected ? const Color(0xFFF9F7F2) : Colors.transparent,
         ),
         child: Text(label,
             style: TextStyle(
@@ -1258,7 +1199,8 @@ class _PomodoroPageState extends State<PomodoroPage> {
     );
   }
 
-  Widget _buildTaskLink() {    const white = Color(0xFFF9F7F2);
+  Widget _buildTaskLink() {
+    const white = Color(0xFFF9F7F2);
     TodoItem? linked;
     for (final todo in _todayTodos) {
       if (todo.id == _svc.associatedTodoId) {
@@ -1362,23 +1304,24 @@ class _PomodoroPageState extends State<PomodoroPage> {
           runSpacing: 8,
           alignment: WrapAlignment.center,
           children: [
-        FilledButton.icon(
-          onPressed: _svc.isPaused ? _svc.resume : _svc.pause,
-          icon: Icon(_svc.isPaused ? Icons.play_arrow : Icons.pause,
-              color: AppColors.ink),
-          label: Text(_svc.isPaused ? '继续专注' : '暂停'),
-          style: mainStyle,
-        ),
-        TextButton.icon(
-          onPressed: _confirmAbort,
-          icon: const Icon(Icons.stop_outlined, size: 18),
-          label: const Text('结束本次'),
-          style: TextButton.styleFrom(
-            foregroundColor: white.withValues(alpha: 0.86),
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 15),
-          ),
-        ),
-      ]);
+            FilledButton.icon(
+              onPressed: _svc.isPaused ? _svc.resume : _svc.pause,
+              icon: Icon(_svc.isPaused ? Icons.play_arrow : Icons.pause,
+                  color: AppColors.ink),
+              label: Text(_svc.isPaused ? '继续专注' : '暂停'),
+              style: mainStyle,
+            ),
+            TextButton.icon(
+              onPressed: _confirmAbort,
+              icon: const Icon(Icons.stop_outlined, size: 18),
+              label: const Text('结束本次'),
+              style: TextButton.styleFrom(
+                foregroundColor: white.withValues(alpha: 0.86),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 15),
+              ),
+            ),
+          ]);
     }
     return Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
       FilledButton.icon(
@@ -1389,10 +1332,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
       ),
       if (_svc.suggestedNext != null) ...[
         const SizedBox(height: 10),
-        Wrap(
-            spacing: 10,
-            alignment: WrapAlignment.center,
-            children: [
+        Wrap(spacing: 10, alignment: WrapAlignment.center, children: [
           TextButton.icon(
             onPressed: () => _svc.startPhase(_svc.suggestedNext!),
             icon: const Icon(Icons.self_improvement, size: 18),

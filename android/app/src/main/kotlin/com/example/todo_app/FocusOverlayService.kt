@@ -6,9 +6,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
-import android.graphics.Color
 import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -19,15 +17,14 @@ import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.TextView
 import kotlin.math.abs
 
-/** 专注计时悬浮窗：简约深色胶囊，可拖动，点击回到应用。 */
+/** 专注计时悬浮窗：暖白钟盘，可拖动，点击回到应用。 */
 class FocusOverlayService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
-    private var titleView: TextView? = null
-    private var timeView: TextView? = null
+    private var clockView: FocusClockView? = null
+    private var plannedSeconds = 1
     private val handler = Handler(Looper.getMainLooper())
     private var phase = "focus"
 
@@ -46,7 +43,7 @@ class FocusOverlayService : Service() {
             }
             updateText()
             // 系统通知自身驱动秒数；仅悬浮窗需要每秒刷新，避免后台空转。
-            if (overlayView != null) handler.postDelayed(this, 1000)
+            if (overlayView != null && !paused) handler.postDelayed(this, 1000)
             else if (!paused && !stopwatch) {
                 handler.postDelayed(this,
                     (targetEpochMs - System.currentTimeMillis()).coerceAtLeast(1L))
@@ -68,6 +65,7 @@ class FocusOverlayService : Service() {
         frozenSeconds = intent.getIntExtra(EXTRA_FROZEN, 0)
         title = intent.getStringExtra(EXTRA_TITLE) ?: ""
         phase = intent.getStringExtra("phase") ?: "focus"
+        plannedSeconds = intent.getIntExtra("planned", 1)
         startForeground(NOTIFICATION_ID, timerNotification())
         FocusTimerEndReceiver.schedule(this, if (paused || stopwatch) 0L else targetEpochMs)
         if (intent.getBooleanExtra("overlay", false) && Settings.canDrawOverlays(this)) {
@@ -134,45 +132,20 @@ class FocusOverlayService : Service() {
     }
 
     private fun updateText() {
-        timeView?.text = if (paused) "${format(currentSeconds())} · 已暂停" else format(currentSeconds())
-        titleView?.text = if (title.isEmpty()) phaseTitle() else title
+        clockView?.update(currentSeconds(), paused, title, phaseTitle(), stopwatch, plannedSeconds)
     }
 
     private fun showOverlay() {
         if (overlayView != null) return
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
 
-        val padH = (14 * resources.displayMetrics.density).toInt()
-        val padV = (10 * resources.displayMetrics.density).toInt()
-        val bg = GradientDrawable().apply {
-            setColor(Color.parseColor("#E6162228"))
-            cornerRadius = 20 * resources.displayMetrics.density
-            setStroke(1, Color.parseColor("#33FFFFFF"))
-        }
-
-        titleView = TextView(this).apply {
-            setTextColor(Color.parseColor("#F2EFE8"))
-            textSize = 12f
-            maxLines = 1
-        }
-        timeView = TextView(this).apply {
-            setTextColor(Color.parseColor("#92BBC2"))
-            textSize = 17f
-        }
-        val column = android.widget.LinearLayout(this).apply {
-            orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(padH, padV, padH, padV)
-            addView(titleView)
-            addView(timeView)
-        }
-        overlayView = android.widget.FrameLayout(this).apply {
-            background = bg
-            addView(column)
-        }
+        val density = resources.displayMetrics.density
+        clockView = FocusClockView(this)
+        overlayView = clockView
 
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            (120 * density).toInt(),
+            (140 * density).toInt(),
             if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
@@ -231,8 +204,7 @@ class FocusOverlayService : Service() {
     private fun removeOverlay() {
         overlayView?.let { try { windowManager?.removeView(it) } catch (_: RuntimeException) {} }
         overlayView = null
-        timeView = null
-        titleView = null
+        clockView = null
     }
 
     override fun onDestroy() {

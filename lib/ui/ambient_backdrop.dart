@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import '../models/weather_scene.dart';
 
 /// The photograph remains sharp. Only local content surfaces blur it.
 class AmbientBackdrop extends StatelessWidget {
@@ -11,6 +12,7 @@ class AmbientBackdrop extends StatelessWidget {
     this.customPath,
     this.customPortraitX = 0,
     this.shade = .10,
+    this.weather = AmbientWeather.clear,
   });
 
   static const sceneAssets = [
@@ -43,6 +45,14 @@ class AmbientBackdrop extends StatelessWidget {
   final String? customPath;
   final double customPortraitX;
   final double shade;
+  final AmbientWeather weather;
+
+  static String sceneAsset(int index, AmbientWeather weather) {
+    final selected = index.clamp(0, sceneAssets.length - 1);
+    if (weather == AmbientWeather.clear) return sceneAssets[selected];
+    final phase = const ['noon', 'dusk', 'night', 'dawn'][selected];
+    return 'assets/backgrounds/alpine_${weather.name}_$phase.png';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,6 +60,7 @@ class AmbientBackdrop extends StatelessWidget {
         customPath != null &&
         File(customPath!).existsSync();
     final index = sceneIndex.clamp(0, sceneAssets.length - 1);
+    final asset = sceneAsset(index, weather);
     final alignment = compact
         ? Alignment(custom ? customPortraitX.clamp(-1.0, 1.0) : -.10, 0)
         : Alignment.center;
@@ -59,13 +70,13 @@ class AmbientBackdrop extends StatelessWidget {
         switchInCurve: Curves.easeInOutCubic,
         switchOutCurve: Curves.easeInOutCubic,
         child: SizedBox.expand(
-          key: ValueKey(custom ? customPath : index),
+          key: ValueKey(custom ? customPath : asset),
           child: custom
               ? Image.file(File(customPath!),
                   fit: BoxFit.cover,
                   alignment: alignment,
                   filterQuality: FilterQuality.medium)
-              : Image.asset(sceneAssets[index],
+              : Image.asset(asset,
                   fit: BoxFit.cover,
                   alignment: alignment,
                   filterQuality: FilterQuality.medium),

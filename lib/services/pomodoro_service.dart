@@ -98,6 +98,7 @@ class PomodoroService extends ChangeNotifier {
       'frozen': pausedElapsedSeconds ?? pausedRemainingSeconds ?? 0,
       'title': associatedTaskTitle ?? '',
       'phase': runningPhase!.name,
+      'plannedSeconds': currentPlannedSeconds(),
     }).catchError((_) {});
   }
 

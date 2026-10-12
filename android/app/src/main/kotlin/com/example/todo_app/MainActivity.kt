@@ -37,6 +37,7 @@ class MainActivity : FlutterActivity() {
                                 putExtra("title", call.argument<String>("title") ?: "")
                                 putExtra("phase", call.argument<String>("phase") ?: "focus")
                                 putExtra("overlay", call.argument<Boolean>("overlay") ?: false)
+                                putExtra("planned", call.argument<Int>("plannedSeconds") ?: 1)
                             }
                             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent)
                             else startService(intent)

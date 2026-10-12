@@ -23,6 +23,7 @@ import 'package:todo_app/services/memo_service.dart';
 import 'package:todo_app/services/pomodoro_service.dart';
 import 'package:todo_app/ui/app_theme.dart';
 import 'package:todo_app/ui/glass_panel.dart';
+import 'package:todo_app/app_identity.dart';
 import 'package:todo_app/ui/frosted_form_dialog.dart';
 
 import 'isar_test_base.dart';
@@ -208,7 +209,7 @@ void main() {
     debugPrint('home-preview: fonts loaded');
 
     await tester.pumpWidget(MaterialApp(
-      title: '学习桌',
+      title: AppIdentity.fullName,
       theme: buildAppTheme(),
       builder: accessibleNavigation
           ? (context, child) => MediaQuery(
@@ -646,7 +647,7 @@ void main() {
         navigateTo: '生活',
         fileName: 'record-mobile-390.png');
     expect(
-        tester.getTopLeft(find.text('学习桌').first).dy, greaterThanOrEqualTo(32));
+        tester.getTopLeft(find.text(AppIdentity.name).first).dy, greaterThanOrEqualTo(32));
     expect(find.text('备忘录'), findsWidgets);
     expect(find.text('番茄钟'), findsNothing);
     await tester.tap(find.text('饮食').hitTestable().first);
