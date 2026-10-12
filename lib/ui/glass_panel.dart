@@ -133,11 +133,11 @@ class GlassPanel extends StatelessWidget {
         : Colors.white.withValues(alpha: isDark ? .30 : .48);
     final highlight = Colors.white.withValues(
         alpha: scene == AmbientPalette.night ? .34 : (isDark ? .56 : .70));
-    // 滚动冻结：实时模糊暂停时走无模糊渐变，防止滚动闪烁并省下模糊开销
-    final blurFrozen = GlassTuning.scrolling.value;
+    // 滚动冻结：实时模糊暂停（保留玻璃 tint 外观）；无障碍模式保留实底可读
+    final accessibleOnly =
+        MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
     final reduceEffects =
-        (MediaQuery.maybeOf(context)?.accessibleNavigation ?? false) ||
-            blurFrozen;
+        accessibleOnly || GlassTuning.scrolling.value;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -166,7 +166,9 @@ class GlassPanel extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(color: edge),
-              gradient: reduceEffects
+              // 冻结（滚动/无障碍）时保留玻璃 tint 渐变、仅去掉实时模糊：
+              // 与松手后的玻璃观感一致，不再跳变成实色块
+              gradient: accessibleOnly
                   ? LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,

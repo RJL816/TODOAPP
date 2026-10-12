@@ -544,21 +544,56 @@ class _PomodoroPageState extends State<PomodoroPage> {
     final intervalCtrl =
         TextEditingController(text: '${_svc.longBreakInterval}');
 
+    var overlayEnabled = _svc.focusOverlayEnabled;
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('番茄钟设置'),
         content: SizedBox(
           width: 340,
-          child: Column(
+          child: StatefulBuilder(builder: (context, setDialogState) {
+            return Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               _durationField(focusCtrl, '专注时长（分钟）'),
               _durationField(shortCtrl, '短休息（分钟）'),
               _durationField(longCtrl, '长休息（分钟）'),
               _durationField(intervalCtrl, '每几个番茄进入长休息'),
+              if (Platform.isAndroid) ...[
+                const Divider(),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('专注悬浮窗'),
+                  subtitle: Text(overlayEnabled
+                      ? '专注时在屏幕上悬浮显示计时，可拖动'
+                      : '关闭'),
+                  value: overlayEnabled,
+                  onChanged: (v) async {
+                    if (v) {
+                      const channel =
+                          MethodChannel('com.todo.app/focus_overlay');
+                      final can = await channel
+                          .invokeMethod<bool>('canDrawOverlays');
+                      if (can != true) {
+                        await channel.invokeMethod(
+                            'openOverlayPermissionSettings');
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                  content: Text(
+                                      '请授予"显示在其他应用上层"权限后返回再开启')));
+                        }
+                        return;
+                      }
+                    }
+                    setDialogState(() => overlayEnabled = v);
+                    await _svc.setFocusOverlayEnabled(v);
+                  },
+                ),
+              ],
             ],
-          ),
+            );
+          }),
         ),
         actions: [
           TextButton(

@@ -13,6 +13,8 @@
     
     <!-- Android 13+ 通知权限（提醒必需） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 专注计时悬浮窗（用户需在系统设置授予"显示在其他应用上层"） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <!-- Android 12+ 精确提醒（"闹钟和提醒"特殊权限，未授予时降级为不精确提醒） -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
     <!-- 重启后恢复已排定的提醒（flutter_local_notifications 的 boot receiver） -->
@@ -46,6 +48,11 @@
             </intent-filter>
         </activity>
         
+        <!-- 专注计时悬浮窗服务 -->
+        <service
+            android:name=".FocusOverlayService"
+            android:exported="false" />
+
         <!-- 考试倒计时桌面小部件 -->
         <receiver
             android:name=".ExamWidgetProvider"

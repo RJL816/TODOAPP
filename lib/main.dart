@@ -339,6 +339,7 @@ class _TodoHomePageState extends State<TodoHomePage>
   ReleaseInfo? _newRelease;
 
   Timer? _updateCheckTimer;
+  Timer? _scrollFreezeTimer; // 滚动冻结的超时自愈
 
   /// 启动静默检查更新：发现新版时提示一次（忽略后同版本不再打扰）
   Future<void> _silentCheckForUpdate() async {
@@ -1094,17 +1095,29 @@ class _TodoHomePageState extends State<TodoHomePage>
                               _buildDesktopNav(theme),
                             Expanded(
                                 child: NotificationListener<ScrollNotification>(
-                              // 滚动期间冻结实时模糊：防 Impeller 滚动闪烁 + 省模糊开销
+                              // 滚动期间冻结实时模糊：防闪烁 + 省模糊开销。
+                              // 超时自愈：个别场景 ScrollEnd 可能丢失，
+                              // 450ms 内无后续滚动事件即解冻，避免永久冻结
                               onNotification: (notification) {
-                                if (notification is ScrollStartNotification) {
+                                void freeze() {
+                                  _scrollFreezeTimer?.cancel();
                                   if (!GlassTuning.scrolling.value) {
                                     GlassTuning.scrolling.value = true;
                                   }
+                                  _scrollFreezeTimer = Timer(
+                                      const Duration(milliseconds: 450), () {
+                                    GlassTuning.scrolling.value = false;
+                                  });
+                                }
+
+                                if (notification is ScrollStartNotification ||
+                                    notification
+                                        is ScrollUpdateNotification) {
+                                  freeze();
                                 } else if (notification
                                     is ScrollEndNotification) {
-                                  if (GlassTuning.scrolling.value) {
-                                    GlassTuning.scrolling.value = false;
-                                  }
+                                  _scrollFreezeTimer?.cancel();
+                                  GlassTuning.scrolling.value = false;
                                 }
                                 return false;
                               },
@@ -2288,6 +2301,9 @@ class _TodoHomePageState extends State<TodoHomePage>
           color: Colors.transparent,
           child: InkWell(
             onTap: hasCourse ? () => _navigateTo(1) : null,
+            // 玻璃卡上按压高亮调至极轻：避免整卡被高亮染成实色
+            highlightColor: Colors.white.withValues(alpha: .04),
+            splashColor: Colors.white.withValues(alpha: .04),
             child: Stack(children: [
               // 室内暖灯打在卡面上：右上角一束极弱暖光
               Positioned(

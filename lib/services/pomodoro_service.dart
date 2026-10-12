@@ -45,6 +45,9 @@ class PomodoroService extends ChangeNotifier {
   static const String _kLongBreak = 'pomodoro_long_break_minutes';
   static const String _kLongBreakInterval = 'pomodoro_long_break_interval';
   static const String _kStopwatchMode = 'pomodoro_stopwatch_mode';
+  static const String _kFocusOverlay = 'pomodoro_focus_overlay';
+  static const MethodChannel _overlayChannel =
+      MethodChannel('com.todo.app/focus_overlay');
   static const String _kStateKey = 'pomodoro_state';
 
   int focusMinutes = 25;
@@ -54,6 +57,9 @@ class PomodoroService extends ChangeNotifier {
 
   /// 正计时模式：专注不限时长，从 0 开始计，随时"完成"记录实际时长
   bool stopwatchMode = false;
+
+  /// 专注悬浮窗（Android，需用户授予"显示在其他应用上层"权限）
+  bool focusOverlayEnabled = true;
 
   // ==================== 运行状态（持久化到 _kStateKey） ====================
   PomodoroRunPhase? runningPhase; // null = 空闲
@@ -72,6 +78,42 @@ class PomodoroService extends ChangeNotifier {
 
   static const MethodChannel _screenChannel =
       MethodChannel('com.todo.app/screen');
+
+  /// 专注悬浮窗：随专注状态显示/更新/隐藏（Android，需悬浮窗权限）
+  void _updateFocusOverlay() {
+    if (!Platform.isAndroid || !focusOverlayEnabled) {
+      if (Platform.isAndroid) {
+        _overlayChannel.invokeMethod('hideFocusOverlay').catchError((_) {});
+      }
+      return;
+    }
+    _overlayChannel.invokeMethod('showFocusOverlay', {
+      'stopwatch': stopwatchMode,
+      'startEpochMs':
+          sessionStartTime?.millisecondsSinceEpoch ?? now().millisecondsSinceEpoch,
+      'targetEpochMs': targetEndTime?.millisecondsSinceEpoch ?? 0,
+      'paused': isPaused,
+      'frozen': pausedElapsedSeconds ?? pausedRemainingSeconds ?? 0,
+      'title': associatedTaskTitle ?? '',
+    }).catchError((_) {});
+  }
+
+  /// 设置悬浮窗开关（关闭时立即隐藏）
+  Future<void> setFocusOverlayEnabled(bool enable) async {
+    focusOverlayEnabled = enable;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kFocusOverlay, enable);
+    } catch (_) {}
+    if (!enable) {
+      if (Platform.isAndroid) {
+        _overlayChannel.invokeMethod('hideFocusOverlay').catchError((_) {});
+      }
+    } else {
+      _updateFocusOverlay();
+    }
+    notifyListeners();
+  }
 
   /// 专注运行/暂停期间：锁屏与息屏界面保持计时可见、屏幕常亮；
   /// 离开专注后恢复系统默认。仅 Android 有效。
@@ -146,6 +188,7 @@ class PomodoroService extends ChangeNotifier {
       longBreakMinutes = prefs.getInt(_kLongBreak) ?? 15;
       longBreakInterval = prefs.getInt(_kLongBreakInterval) ?? 4;
       stopwatchMode = prefs.getBool(_kStopwatchMode) ?? false;
+      focusOverlayEnabled = prefs.getBool(_kFocusOverlay) ?? false;
       await _loadState();
     } catch (e) {
       debugPrint('番茄钟初始化失败: $e');
@@ -284,6 +327,7 @@ class PomodoroService extends ChangeNotifier {
     if (targetEndTime != null) _scheduleEndNotification();
     _startTicker();
     _updateScreenKeepOn();
+    _updateFocusOverlay();
     notifyListeners();
   }
 
@@ -300,6 +344,7 @@ class PomodoroService extends ChangeNotifier {
     _stopTicker();
     await _persistState();
     _updateScreenKeepOn();
+    _updateFocusOverlay();
     notifyListeners();
   }
 
@@ -319,6 +364,7 @@ class PomodoroService extends ChangeNotifier {
     await _persistState();
     _startTicker();
     _updateScreenKeepOn();
+    _updateFocusOverlay();
     notifyListeners();
   }
 
@@ -344,6 +390,7 @@ class PomodoroService extends ChangeNotifier {
     _cancelEndNotification();
     _stopTicker();
     _updateScreenKeepOn();
+    _updateFocusOverlay();
     notifyListeners();
   }
 
@@ -393,6 +440,7 @@ class PomodoroService extends ChangeNotifier {
     _cancelEndNotification();
     _stopTicker();
     _updateScreenKeepOn();
+    _updateFocusOverlay();
     notifyListeners();
   }
 
@@ -467,6 +515,7 @@ class PomodoroService extends ChangeNotifier {
     _cancelEndNotification();
     _stopTicker();
     _updateScreenKeepOn();
+    _updateFocusOverlay();
     notifyListeners();
   }
 
