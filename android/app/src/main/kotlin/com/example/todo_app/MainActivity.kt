@@ -2,6 +2,7 @@ package com.example.todo_app
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
@@ -13,90 +14,62 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.todo.app/screen")
             .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "showFocusOverlay" -> {
-                        if (!Settings.canDrawOverlays(this)) {
-                            result.success(false)
-                        } else {
-                            val intent = Intent(this, FocusOverlayService::class.java).apply {
-                                putExtra("stopwatch", call.argument<Boolean>("stopwatch") ?: true)
-                                putExtra("start", call.argument<Long>("startEpochMs") ?: 0L)
-                                putExtra("target", call.argument<Long>("targetEpochMs") ?: 0L)
-                                putExtra("paused", call.argument<Boolean>("paused") ?: false)
-                                putExtra("frozen", call.argument<Int>("frozen") ?: 0)
-                                putExtra("title", call.argument<String>("title") ?: "")
-                            }
-                            startService(intent)
-                            result.success(true)
-                        }
-                    }
-                    "hideFocusOverlay" -> {
-                        startService(Intent(this, FocusOverlayService::class.java).setAction(FocusOverlayService.ACTION_HIDE))
-                        result.success(true)
-                    }
-                    "openOverlayPermissionSettings" -> {
-                        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$packageName"))
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        result.success(true)
-                    }
-                    // 专注运行时：锁屏/息屏界面继续显示计时，屏幕保持常亮
-                    "setFocusKeepOn" -> {
-                        val keep = call.argument<Boolean>("keep") ?: false
-                        runOnUiThread {
-                            if (keep) {
-                                setShowWhenLocked(true)
-                                setTurnScreenOn(true)
-                                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                            } else {
-                                setShowWhenLocked(false)
-                                setTurnScreenOn(false)
-                                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-                            }
-                        }
-                        result.success(true)
-                    }
-                    else -> result.notImplemented()
-                }
+                if (call.method == "setFocusKeepOn") {
+                    val keep = call.argument<Boolean>("keep") ?: false
+                    // 只在应用前台常亮，不主动唤醒手机或覆盖锁屏。
+                    if (keep) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                    result.success(true)
+                } else result.notImplemented()
             }
-
-        // 专注悬浮窗（需要用户授予"显示在其他应用上层"权限）
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.todo.app/focus_overlay")
             .setMethodCallHandler { call, result ->
-                when (call.method) {
-                    "canDrawOverlays" -> result.success(Settings.canDrawOverlays(this))
-                    "showFocusOverlay" -> {
-                        if (!Settings.canDrawOverlays(this)) {
-                            result.success(false)
-                        } else {
+                try {
+                    when (call.method) {
+                        "canDrawOverlays" -> result.success(Settings.canDrawOverlays(this))
+                        "syncFocusTimer" -> {
                             val intent = Intent(this, FocusOverlayService::class.java).apply {
-                                putExtra("stopwatch", call.argument<Boolean>("stopwatch") ?: true)
-                                putExtra("start", call.argument<Long>("startEpochMs") ?: 0L)
-                                putExtra("target", call.argument<Long>("targetEpochMs") ?: 0L)
+                                putExtra("stopwatch", call.argument<Boolean>("stopwatch") ?: false)
+                                putExtra("start", call.argument<Number>("startEpochMs")?.toLong() ?: 0L)
+                                putExtra("target", call.argument<Number>("targetEpochMs")?.toLong() ?: 0L)
                                 putExtra("paused", call.argument<Boolean>("paused") ?: false)
                                 putExtra("frozen", call.argument<Int>("frozen") ?: 0)
                                 putExtra("title", call.argument<String>("title") ?: "")
+                                putExtra("phase", call.argument<String>("phase") ?: "focus")
+                                putExtra("overlay", call.argument<Boolean>("overlay") ?: false)
                             }
-                            startService(intent)
+                            if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent)
+                            else startService(intent)
                             result.success(true)
                         }
+                        "stopFocusTimer" -> {
+                            FocusTimerEndReceiver.cancel(this)
+                            stopService(Intent(this, FocusOverlayService::class.java))
+                            result.success(true)
+                        }
+                        "openOverlayPermissionSettings" -> {
+                            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:$packageName")))
+                            result.success(true)
+                        }
+                        "openFocusNotificationSettings" -> {
+                            val intent = if (Build.VERSION.SDK_INT >= 26) {
+                                Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                    .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+                            } else Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:$packageName"))
+                            startActivity(intent)
+                            result.success(true)
+                        }
+                        "openFocusBackgroundSettings" -> {
+                            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                Uri.parse("package:$packageName")))
+                            result.success(true)
+                        }
+                        else -> result.notImplemented()
                     }
-                    "hideFocusOverlay" -> {
-                        startService(
-                            Intent(this, FocusOverlayService::class.java)
-                                .setAction(FocusOverlayService.ACTION_HIDE))
-                        result.success(true)
-                    }
-                    "openOverlayPermissionSettings" -> {
-                        val intent = Intent(
-                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                            Uri.parse("package:$packageName"))
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(intent)
-                        result.success(true)
-                    }
-                    else -> result.notImplemented()
+                } catch (e: Exception) {
+                    result.error("focus_timer_unavailable", e.message, null)
                 }
             }
     }

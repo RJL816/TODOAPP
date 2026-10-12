@@ -59,7 +59,7 @@ class PomodoroService extends ChangeNotifier {
   bool stopwatchMode = false;
 
   /// 专注悬浮窗（Android，需用户授予"显示在其他应用上层"权限）
-  bool focusOverlayEnabled = true;
+  bool focusOverlayEnabled = false;
 
   // ==================== 运行状态（持久化到 _kStateKey） ====================
   PomodoroRunPhase? runningPhase; // null = 空闲
@@ -75,26 +75,29 @@ class PomodoroService extends ChangeNotifier {
 
   Timer? _ticker;
   bool _loaded = false;
+  bool _completing = false;
+  Future<void> _notificationUpdate = Future<void>.value();
 
   static const MethodChannel _screenChannel =
       MethodChannel('com.todo.app/screen');
 
-  /// 专注悬浮窗：随专注状态显示/更新/隐藏（Android，需悬浮窗权限）
+  /// 通知栏计时始终同步；悬浮窗由用户单独开启。
   void _updateFocusOverlay() {
-    if (!Platform.isAndroid || !focusOverlayEnabled) {
-      if (Platform.isAndroid) {
-        _overlayChannel.invokeMethod('hideFocusOverlay').catchError((_) {});
-      }
+    if (!Platform.isAndroid) return;
+    if (runningPhase == null) {
+      _overlayChannel.invokeMethod('stopFocusTimer').catchError((_) {});
       return;
     }
-    _overlayChannel.invokeMethod('showFocusOverlay', {
-      'stopwatch': stopwatchMode,
-      'startEpochMs':
-          sessionStartTime?.millisecondsSinceEpoch ?? now().millisecondsSinceEpoch,
+    _overlayChannel.invokeMethod('syncFocusTimer', {
+      'overlay': focusOverlayEnabled,
+      'stopwatch': isStopwatchFocus,
+      'startEpochMs': sessionStartTime?.millisecondsSinceEpoch ??
+          now().millisecondsSinceEpoch,
       'targetEpochMs': targetEndTime?.millisecondsSinceEpoch ?? 0,
       'paused': isPaused,
       'frozen': pausedElapsedSeconds ?? pausedRemainingSeconds ?? 0,
       'title': associatedTaskTitle ?? '',
+      'phase': runningPhase!.name,
     }).catchError((_) {});
   }
 
@@ -105,18 +108,11 @@ class PomodoroService extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kFocusOverlay, enable);
     } catch (_) {}
-    if (!enable) {
-      if (Platform.isAndroid) {
-        _overlayChannel.invokeMethod('hideFocusOverlay').catchError((_) {});
-      }
-    } else {
-      _updateFocusOverlay();
-    }
+    _updateFocusOverlay();
     notifyListeners();
   }
 
-  /// 专注运行/暂停期间：锁屏与息屏界面保持计时可见、屏幕常亮；
-  /// 离开专注后恢复系统默认。仅 Android 有效。
+  /// 应用前台专注时保持常亮；锁屏后由系统通知显示计时。
   void _updateScreenKeepOn() {
     if (!Platform.isAndroid) return;
     final keep = runningPhase == PomodoroRunPhase.focus;
@@ -133,9 +129,9 @@ class PomodoroService extends ChangeNotifier {
       pausedElapsedSeconds == null;
 
   bool get isRunning =>
+      runningPhase != null && (targetEndTime != null || _isStopwatchRunning);
+  bool get isPaused =>
       runningPhase != null &&
-      (targetEndTime != null || _isStopwatchRunning);
-  bool get isPaused => runningPhase != null &&
       (pausedRemainingSeconds != null || pausedElapsedSeconds != null);
 
   /// 正计时专注是否处于活动/暂停状态
@@ -157,7 +153,9 @@ class PomodoroService extends ChangeNotifier {
     if (runningPhase == null) return 0;
     if (pausedRemainingSeconds != null) return pausedRemainingSeconds!;
     if (targetEndTime == null) return 0;
-    final remain = targetEndTime!.difference(now()).inSeconds;
+    // 向上取整：不能在系统通知触发前一秒提前完成、取消提醒。
+    final remain =
+        (targetEndTime!.difference(now()).inMilliseconds / 1000).ceil();
     return remain < 0 ? 0 : remain;
   }
 
@@ -189,7 +187,9 @@ class PomodoroService extends ChangeNotifier {
       longBreakInterval = prefs.getInt(_kLongBreakInterval) ?? 4;
       stopwatchMode = prefs.getBool(_kStopwatchMode) ?? false;
       focusOverlayEnabled = prefs.getBool(_kFocusOverlay) ?? false;
+      playSounds = prefs.getBool('focus_alert_sound') ?? true;
       await _loadState();
+      _updateFocusOverlay();
     } catch (e) {
       debugPrint('番茄钟初始化失败: $e');
     }
@@ -211,6 +211,7 @@ class PomodoroService extends ChangeNotifier {
           ? DateTime.parse(map['targetEnd'] as String)
           : null;
       pausedRemainingSeconds = map['pausedRemaining'] as int?;
+      pausedElapsedSeconds = map['pausedElapsed'] as int?;
       sessionStartTime = map['sessionStart'] != null
           ? DateTime.parse(map['sessionStart'] as String)
           : null;
@@ -307,7 +308,7 @@ class PomodoroService extends ChangeNotifier {
 
   /// 开始一个阶段
   Future<void> startPhase(PomodoroRunPhase phase, {int? todoId}) async {
-    if (isRunning) return;
+    if (runningPhase != null || _completing) return;
     runningPhase = phase;
     if (phase == PomodoroRunPhase.focus) {
       associatedTodoId = todoId ?? associatedTodoId;
@@ -474,10 +475,13 @@ class PomodoroService extends ChangeNotifier {
 
   /// 阶段自然结束：记录完成会话、推进节奏、建议下一阶段
   Future<void> _completeNaturally({bool missedWhileAway = false}) async {
-    final phase = runningPhase!;
-    final end = targetEndTime ?? now();
-    final start = sessionStartTime ??
-        end.subtract(Duration(seconds: plannedSeconds(phase)));
+    if (_completing || runningPhase == null) return;
+    _completing = true;
+    try {
+      final phase = runningPhase!;
+      final end = targetEndTime ?? now();
+      final start = sessionStartTime ??
+          end.subtract(Duration(seconds: plannedSeconds(phase)));
 
     await _recordSession(
       type: phase,
@@ -487,36 +491,40 @@ class PomodoroService extends ChangeNotifier {
       completed: true,
     );
 
-    PomodoroRunPhase? next;
-    if (phase == PomodoroRunPhase.focus) {
-      focusStreak += 1;
-      completionChoicePending = associatedTaskTitle?.isNotEmpty == true;
-      next = focusStreak % longBreakInterval == 0
-          ? PomodoroRunPhase.longBreak
-          : PomodoroRunPhase.shortBreak;
-      // 前台时播放完成音效（后台由系统通知提醒）
-      if (playSounds) {
-        try {
-          GamificationService.instance.playAllCompleteSound();
-        } catch (_) {}
+      PomodoroRunPhase? next;
+      if (phase == PomodoroRunPhase.focus) {
+        focusStreak += 1;
+        completionChoicePending = associatedTaskTitle?.isNotEmpty == true;
+        next = focusStreak % longBreakInterval == 0
+            ? PomodoroRunPhase.longBreak
+            : PomodoroRunPhase.shortBreak;
+        // 前台时播放完成音效（后台由系统通知提醒）
+        if (playSounds && !Platform.isAndroid && !missedWhileAway) {
+          try {
+            GamificationService.instance.playAllCompleteSound();
+          } catch (_) {}
+        }
+      } else {
+        // 休息结束，回到可专注状态
+        next = null;
+        if (playSounds && !Platform.isAndroid && !missedWhileAway) {
+          try {
+            GamificationService.instance.playCheckSound();
+          } catch (_) {}
+        }
       }
-    } else {
-      // 休息结束，回到可专注状态
-      next = null;
-      if (playSounds) {
-        try {
-          GamificationService.instance.playCheckSound();
-        } catch (_) {}
-      }
-    }
-    suggestedNext = next;
+      suggestedNext = next;
 
-    await _resetState();
-    _cancelEndNotification();
-    _stopTicker();
-    _updateScreenKeepOn();
-    _updateFocusOverlay();
-    notifyListeners();
+      await _resetState();
+      // Android 的系统提醒独立于前台 tick，保留已触发或即将触发的结束通知。
+      if (!Platform.isAndroid) _cancelEndNotification();
+      _stopTicker();
+      _updateScreenKeepOn();
+      _updateFocusOverlay();
+      notifyListeners();
+    } finally {
+      _completing = false;
+    }
   }
 
   Future<void> _recordSession({
@@ -547,25 +555,40 @@ class PomodoroService extends ChangeNotifier {
 
   // ==================== 结束通知（复用阶段 2 调度） ====================
 
+  /// 提示音切换时同步已经排定的结束提醒。
+  void refreshEndNotification() {
+    if (targetEndTime != null) _scheduleEndNotification();
+  }
+
   void _scheduleEndNotification() {
     if (targetEndTime == null) return;
     final phase = runningPhase!;
-    ReminderService.instance.scheduleOneShot(
+    final deadline = targetEndTime!;
+    final sound = playSounds;
+    final focusDuration = focusMinutes;
+    _notificationUpdate = _notificationUpdate.then((_) async {
+      if (!deadline.isAfter(now())) return;
+      await ReminderService.instance.scheduleOneShot(
       id: ReminderService.pomodoroNotificationId,
-      fireAt: targetEndTime!,
+      fireAt: deadline,
       title: phase == PomodoroRunPhase.focus ? '番茄专注完成 🍅' : '休息结束',
       body: phase == PomodoroRunPhase.focus
-          ? '专注 $focusMinutes 分钟完成，休息一下吧'
+          ? '专注 $focusDuration 分钟完成，休息一下吧'
           : '休息结束，开始新的专注吧',
       payload: '{"type":"pomodoro"}',
-    );
+      channel: ReminderChannels.pomodoro,
+      playSound: sound,
+      );
+    }).catchError((Object error) {
+      debugPrint('番茄钟提醒同步失败: $error');
+    });
   }
 
   void _cancelEndNotification() {
-    try {
+    _notificationUpdate = _notificationUpdate.then((_) {
       ReminderService.instance
           .cancelOneShot(ReminderService.pomodoroNotificationId);
-    } catch (_) {}
+    }).catchError((_) {});
   }
 
   /// 供 ReminderService 全量重排时保留进行中的番茄钟通知
@@ -583,6 +606,7 @@ class PomodoroService extends ChangeNotifier {
         payload: '{"type":"pomodoro"}',
         target: ReminderTarget.todo, // 仅作展示分组用，跳转逻辑按 payload
         channel: ReminderChannels.pomodoro,
+        playSound: playSounds,
       ),
     ];
   }

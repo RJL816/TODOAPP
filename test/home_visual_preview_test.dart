@@ -71,6 +71,7 @@ void main() {
     required Size size,
     required String fileName,
     String? navigateTo,
+    bool accessibleNavigation = false,
   }) async {
     SharedPreferences.setMockInitialValues(prefs);
     tester.view.physicalSize = size;
@@ -209,6 +210,12 @@ void main() {
     await tester.pumpWidget(MaterialApp(
       title: '学习桌',
       theme: buildAppTheme(),
+      builder: accessibleNavigation
+          ? (context, child) => MediaQuery(
+                data: MediaQuery.of(context).copyWith(accessibleNavigation: true),
+                child: child!,
+              )
+          : null,
       home: const RepaintBoundary(key: Key('preview'), child: TodoHomePage()),
     ));
     debugPrint('home-preview: pumped widget');
@@ -330,6 +337,41 @@ void main() {
         greaterThan(kToolbarHeight));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('Android tablet glass follows slider with accessible navigation',
+      (tester) async {
+    final previousClarity = GlassTuning.clarity.value;
+    addTearDown(() => GlassTuning.clarity.value = previousClarity);
+    await pumpHome(tester,
+        prefs: {
+          'show_ambient_background': true,
+          'ambient_scene_index': 1,
+          'ambient_scene_auto': false,
+          'glass_clarity': .25,
+        },
+        size: const Size(1280, 800),
+        accessibleNavigation: true,
+        fileName: 'home-tablet-glass-1280.png');
+    final panel = find.ancestor(
+        of: find.text('接下来做'), matching: find.byType(GlassPanel)).first;
+    double tintAlpha() => tester.widgetList<DecoratedBox>(find.descendant(
+          of: find.descendant(of: panel, matching: find.byType(BackdropFilter)).first,
+          matching: find.byType(DecoratedBox),
+        )).map((box) => (box.decoration as BoxDecoration).gradient)
+        .whereType<LinearGradient>().first.colors.first.a;
+    final before = tintAlpha();
+    await tester.tap(find.byTooltip('设置').first);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.ensureVisible(find.text('玻璃通透度'));
+    await tester.drag(find.byType(Slider).at(1), const Offset(90, 0));
+    await tester.pump();
+    expect(GlassTuning.clarity.value, greaterThan(.25));
+    expect(tintAlpha(), lessThan(before));
+    final saved = await tester.runAsync(() async =>
+        (await SharedPreferences.getInstance()).getDouble('glass_clarity'));
+    expect(saved, closeTo(GlassTuning.clarity.value, .001));
+    expect(tester.takeException(), isNull);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets('mobile glass stays consistent during touch and scrolling',
       (tester) async {

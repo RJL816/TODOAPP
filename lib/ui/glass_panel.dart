@@ -125,9 +125,10 @@ class GlassPanel extends StatelessWidget {
         : Colors.white.withValues(alpha: isDark ? .30 : .48);
     final highlight = Colors.white.withValues(
         alpha: scene == AmbientPalette.night ? .34 : (isDark ? .56 : .70));
-    // 触摸和滚动期间保持用户设置的玻璃效果；无障碍模式保留实底可读。
+    // 无障碍导航描述读屏/导航行为，不代表用户要求关闭透明度。
+    // 仅明确启用高对比度时使用实底，平板上的辅助服务不会覆盖玻璃设置。
     final accessibleOnly =
-        MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
+        MediaQuery.maybeOf(context)?.highContrast ?? false;
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -159,7 +160,7 @@ class GlassPanel extends StatelessWidget {
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(color: edge),
-              // 无障碍模式走实底保证可读。
+              // 明确启用高对比度时走实底保证可读。
               gradient: accessibleOnly
                   ? LinearGradient(
                       begin: Alignment.topLeft,

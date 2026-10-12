@@ -14,6 +14,7 @@ import '../models/todo_item.dart';
 import '../services/isar_service.dart';
 import '../services/focus_analytics_service.dart';
 import '../services/pomodoro_service.dart';
+import '../services/reminder_service.dart';
 import '../ui/app_theme.dart';
 import '../ui/ambient_backdrop.dart';
 import '../ui/ambient_palette.dart';
@@ -127,6 +128,7 @@ class _PomodoroPageState extends State<PomodoroPage> {
     setState(() => PomodoroService.playSounds = !PomodoroService.playSounds);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('focus_alert_sound', PomodoroService.playSounds);
+    _svc.refreshEndNotification();
   }
 
   @override
@@ -465,69 +467,70 @@ class _PomodoroPageState extends State<PomodoroPage> {
       builder: (context) {
         final bounds = MediaQuery.sizeOf(context);
         return AlertDialog(
-        title: const Text('这次专注做什么'),
-        content: SizedBox(
-          // 平板/横屏自适应：宽度不超屏宽 88%，列表区不超可用高一半
-          width: math.min(420, bounds.width * .88),
-          height: math.min(400, bounds.height * .5),
-          child: Column(children: [
-            TextField(
-                controller: controller,
-                // 不自动聚焦：先浏览事项列表，点输入框时再弹键盘
-                decoration: const InputDecoration(
-                    labelText: '新建一件专注事项', hintText: '例如 阅读论文、整理笔记'),
-                onSubmitted: (value) {
-                  if (value.trim().isNotEmpty) {
-                    Navigator.pop(context, (id: null, title: value.trim()));
-                  }
-                }),
-            const SizedBox(height: 8),
-            Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                    onPressed: () {
-                      if (controller.text.trim().isNotEmpty) {
-                        Navigator.pop(
-                            context, (id: null, title: controller.text.trim()));
-                      }
-                    },
-                    child: const Text('使用这个事项'))),
-            const Divider(),
-            Expanded(
-                child: ListView(children: [
-              if (_svc.associatedTaskTitle != null)
-                ListTile(
-                  leading: const Icon(Icons.link_off, size: 20),
-                  title: const Text('清除当前事项'),
-                  onTap: () => Navigator.pop(context, (id: null, title: null)),
-                ),
-              if (todos.isEmpty)
-                const ListTile(title: Text('今天暂无待办，可以在上方新建事项')),
-              ...todos.map((t) => ListTile(
-                    dense: true,
-                    leading: Icon(
-                      t.isCompleted
-                          ? Icons.check_circle
-                          : Icons.circle_outlined,
-                      size: 18,
-                      color: t.isCompleted ? AppColors.navy : null,
-                    ),
-                    title: Text(t.title,
-                        maxLines: 1, overflow: TextOverflow.ellipsis),
-                    subtitle:
-                        t.taskType.isRecurring ? const Text('每日习惯') : null,
+          title: const Text('这次专注做什么'),
+          content: SizedBox(
+            // 平板/横屏自适应：宽度不超屏宽 88%，列表区不超可用高一半
+            width: math.min(420, bounds.width * .88),
+            height: math.min(400, bounds.height * .5),
+            child: Column(children: [
+              TextField(
+                  controller: controller,
+                  // 不自动聚焦：先浏览事项列表，点输入框时再弹键盘
+                  decoration: const InputDecoration(
+                      labelText: '新建一件专注事项', hintText: '例如 阅读论文、整理笔记'),
+                  onSubmitted: (value) {
+                    if (value.trim().isNotEmpty) {
+                      Navigator.pop(context, (id: null, title: value.trim()));
+                    }
+                  }),
+              const SizedBox(height: 8),
+              Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                      onPressed: () {
+                        if (controller.text.trim().isNotEmpty) {
+                          Navigator.pop(context,
+                              (id: null, title: controller.text.trim()));
+                        }
+                      },
+                      child: const Text('使用这个事项'))),
+              const Divider(),
+              Expanded(
+                  child: ListView(children: [
+                if (_svc.associatedTaskTitle != null)
+                  ListTile(
+                    leading: const Icon(Icons.link_off, size: 20),
+                    title: const Text('清除当前事项'),
                     onTap: () =>
-                        Navigator.pop(context, (id: t.id, title: t.title)),
-                  )),
-            ])),
-          ]),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('取消'),
+                        Navigator.pop(context, (id: null, title: null)),
+                  ),
+                if (todos.isEmpty)
+                  const ListTile(title: Text('今天暂无待办，可以在上方新建事项')),
+                ...todos.map((t) => ListTile(
+                      dense: true,
+                      leading: Icon(
+                        t.isCompleted
+                            ? Icons.check_circle
+                            : Icons.circle_outlined,
+                        size: 18,
+                        color: t.isCompleted ? AppColors.navy : null,
+                      ),
+                      title: Text(t.title,
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle:
+                          t.taskType.isRecurring ? const Text('每日习惯') : null,
+                      onTap: () =>
+                          Navigator.pop(context, (id: t.id, title: t.title)),
+                    )),
+              ])),
+            ]),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('取消'),
+            ),
+          ],
         );
       },
     );
@@ -551,49 +554,81 @@ class _PomodoroPageState extends State<PomodoroPage> {
         title: const Text('番茄钟设置'),
         content: SizedBox(
           width: 340,
-          child: StatefulBuilder(builder: (context, setDialogState) {
+          child: SingleChildScrollView(
+              child: StatefulBuilder(builder: (context, setDialogState) {
             return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _durationField(focusCtrl, '专注时长（分钟）'),
-              _durationField(shortCtrl, '短休息（分钟）'),
-              _durationField(longCtrl, '长休息（分钟）'),
-              _durationField(intervalCtrl, '每几个番茄进入长休息'),
-              if (Platform.isAndroid) ...[
-                const Divider(),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text('专注悬浮窗'),
-                  subtitle: Text(overlayEnabled
-                      ? '专注时在屏幕上悬浮显示计时，可拖动'
-                      : '关闭'),
-                  value: overlayEnabled,
-                  onChanged: (v) async {
-                    if (v) {
-                      const channel =
-                          MethodChannel('com.todo.app/focus_overlay');
-                      final can = await channel
-                          .invokeMethod<bool>('canDrawOverlays');
-                      if (can != true) {
-                        await channel.invokeMethod(
-                            'openOverlayPermissionSettings');
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      '请授予"显示在其他应用上层"权限后返回再开启')));
-                        }
-                        return;
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _durationField(focusCtrl, '专注时长（分钟）'),
+                _durationField(shortCtrl, '短休息（分钟）'),
+                _durationField(longCtrl, '长休息（分钟）'),
+                _durationField(intervalCtrl, '每几个番茄进入长休息'),
+                if (Platform.isAndroid) ...[
+                  const Divider(),
+                  const Text(
+                      '计时会显示在通知栏和锁屏，到点发送提醒。'
+                      '开启通知与“闹钟和提醒”权限，可提高后台提醒的及时性。',
+                      style: TextStyle(fontSize: 12)),
+                  TextButton.icon(
+                    icon: const Icon(Icons.notifications_outlined),
+                    label: const Text('通知与到点提醒设置'),
+                    onPressed: () async {
+                      final reminders = ReminderService.instance;
+                      if (!await reminders.notificationsEnabled()) {
+                        await reminders.requestNotificationPermission();
                       }
-                    }
-                    setDialogState(() => overlayEnabled = v);
-                    await _svc.setFocusOverlayEnabled(v);
-                  },
-                ),
+                      if (!await reminders.exactAlarmsEnabled()) {
+                        await reminders.requestExactAlarmsPermission();
+                      }
+                      if (!context.mounted) return;
+                      await const MethodChannel('com.todo.app/focus_overlay')
+                          .invokeMethod('openFocusNotificationSettings');
+                    },
+                  ),
+                  TextButton.icon(
+                    icon: const Icon(Icons.battery_charging_full),
+                    label: const Text('后台运行设置'),
+                    onPressed: () async {
+                      await const MethodChannel('com.todo.app/focus_overlay')
+                          .invokeMethod('openFocusBackgroundSettings');
+                    },
+                  ),
+                  const Text(
+                      '若锁屏后提醒延迟，可在应用系统设置中允许后台运行；'
+                      '勿扰模式或关闭通知弹窗时，系统可能只保留通知。',
+                      style: TextStyle(fontSize: 12)),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('专注悬浮窗'),
+                    subtitle: Text(overlayEnabled
+                        ? '专注与休息时显示计时，可拖动、点击返回'
+                        : '可选；关闭后仍显示通知栏计时'),
+                    value: overlayEnabled,
+                    onChanged: (v) async {
+                      if (v) {
+                        const channel =
+                            MethodChannel('com.todo.app/focus_overlay');
+                        final can =
+                            await channel.invokeMethod<bool>('canDrawOverlays');
+                        if (can != true) {
+                          await channel
+                              .invokeMethod('openOverlayPermissionSettings');
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text('请授予"显示在其他应用上层"权限后返回再开启')));
+                          }
+                          return;
+                        }
+                      }
+                      setDialogState(() => overlayEnabled = v);
+                      await _svc.setFocusOverlayEnabled(v);
+                    },
+                  ),
+                ],
               ],
-            ],
             );
-          }),
+          })),
         ),
         actions: [
           TextButton(

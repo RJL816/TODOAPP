@@ -13,6 +13,8 @@
     
     <!-- Android 13+ 通知权限（提醒必需） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <!-- 专注计时悬浮窗（用户需在系统设置授予"显示在其他应用上层"） -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
     <!-- Android 12+ 精确提醒（"闹钟和提醒"特殊权限，未授予时降级为不精确提醒） -->
@@ -51,7 +53,23 @@
         <!-- 专注计时悬浮窗服务 -->
         <service
             android:name=".FocusOverlayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started pomodoro countdown or stopwatch with visible ongoing timer notification and optional floating timer" />
+        </service>
+        <receiver android:name=".FocusTimerEndReceiver" android:exported="false" />
+        <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false" />
+        <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
 
         <!-- 考试倒计时桌面小部件 -->
         <receiver

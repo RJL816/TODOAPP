@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ai_service.dart';
 import 'app_theme.dart';
 import 'glass_panel.dart';
+import 'ai_markdown_message.dart';
 
 /// AI 悬浮球：可拖拽、点击展开助手面板；位置记忆。
 /// 显示条件由外部控制（已配置 API 且非沉浸模式时才挂载）。
@@ -346,8 +347,7 @@ class _AiChatPanelState extends State<AiChatPanel> {
                   child: const Text('重试'),
                 ),
               ])
-            : SelectableText(entry.text,
-                style: Theme.of(context).textTheme.bodyMedium),
+            : AiMarkdownMessage(text: entry.text),
       ),
     );
   }

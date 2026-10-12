@@ -5,6 +5,7 @@ import 'dart:ui';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'ui/glass_scroll_behavior.dart';
 import 'package:flutter/services.dart';
 import 'package:isar/isar.dart';
 import 'package:intl/date_symbol_data_local.dart';
@@ -250,6 +251,7 @@ class TodoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: '学习桌',
+      scrollBehavior: const GlassScrollBehavior(),
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       // 中文本地化：日期/时间选择器等 Material 组件随系统语言显示

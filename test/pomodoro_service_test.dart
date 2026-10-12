@@ -18,7 +18,7 @@ void main() {
   late _Clock clock;
 
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues({'focus_alert_sound': false});
     clock = _Clock(DateTime(2026, 9, 24, 10, 0));
     final isar = await openTestIsar();
     IsarService.instance.initForTest(isar);
@@ -169,6 +169,54 @@ void main() {
   });
 
   group('跨启动恢复（防漂移）', () {
+    test('暂停的正计时重启后保持冻结，恢复时排除暂停时间', () async {
+      final first = await newService();
+      await first.setStopwatchMode(true);
+      await first.startPhase(PomodoroRunPhase.focus);
+      clock.advance(const Duration(minutes: 3));
+      await first.pause();
+      clock.advance(const Duration(hours: 1));
+      final restored = await newService();
+      expect(restored.isPaused, isTrue);
+      expect(restored.elapsedSeconds(), 180);
+      await restored.resume();
+      clock.advance(const Duration(seconds: 10));
+      expect(restored.elapsedSeconds(), 190);
+    });
+
+    test('最后半秒仍在计时，不提前取消系统到点提醒', () async {
+      final svc = await newService();
+      await svc.startPhase(PomodoroRunPhase.focus);
+      clock
+          .advance(const Duration(minutes: 24, seconds: 59, milliseconds: 500));
+      await svc.tick();
+      expect(svc.remainingSeconds(), 1);
+      expect(svc.isRunning, isTrue);
+      clock.advance(const Duration(milliseconds: 500));
+      await svc.tick();
+      expect(svc.runningPhase, isNull);
+    });
+
+    test('重复到点回调只记录一个完成会话', () async {
+      final svc = await newService();
+      await svc.startPhase(PomodoroRunPhase.focus);
+      clock.advance(const Duration(minutes: 25));
+      await Future.wait([svc.tick(), svc.tick(), svc.tick()]);
+      final sessions =
+          await IsarService.instance.isar.pomodoroSessions.where().findAll();
+      expect(sessions.length, 1);
+      expect(svc.focusStreak, 1);
+    });
+
+    test('暂停时不能直接覆盖尚未结束的阶段', () async {
+      final svc = await newService();
+      await svc.startPhase(PomodoroRunPhase.focus);
+      await svc.pause();
+      await svc.startPhase(PomodoroRunPhase.shortBreak);
+      expect(svc.runningPhase, PomodoroRunPhase.focus);
+      expect(svc.isPaused, isTrue);
+    });
+
     test('应用重启后从持久化的目标结束时刻重算剩余，而非重置', () async {
       final svc1 = await newService();
       await svc1.startPhase(PomodoroRunPhase.focus);

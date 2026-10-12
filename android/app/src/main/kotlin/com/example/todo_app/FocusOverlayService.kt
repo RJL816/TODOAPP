@@ -1,6 +1,10 @@
 package com.example.todo_app
 
 import android.app.Service
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
@@ -8,6 +12,9 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.Build
+import android.provider.Settings
+import android.view.ViewConfiguration
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -21,7 +28,8 @@ class FocusOverlayService : Service() {
     private var overlayView: View? = null
     private var titleView: TextView? = null
     private var timeView: TextView? = null
-    private var handler: Handler? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var phase = "focus"
 
     private var stopwatch = true
     private var startEpochMs = 0L
@@ -32,51 +40,90 @@ class FocusOverlayService : Service() {
 
     private val tick = object : Runnable {
         override fun run() {
+            if (!paused && !stopwatch && currentSeconds() == 0) {
+                stopSelf()
+                return
+            }
             updateText()
-            handler?.postDelayed(this, 1000)
+            // 系统通知自身驱动秒数；仅悬浮窗需要每秒刷新，避免后台空转。
+            if (overlayView != null) handler.postDelayed(this, 1000)
+            else if (!paused && !stopwatch) {
+                handler.postDelayed(this,
+                    (targetEpochMs - System.currentTimeMillis()).coerceAtLeast(1L))
+            }
         }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_HIDE -> {
-                removeOverlay()
-                stopSelf()
-                return START_NOT_STICKY
-            }
-            ACTION_PAUSE -> {
-                paused = true
-                frozenSeconds = currentSeconds()
-                updateText()
-            }
-            ACTION_RESUME -> {
-                paused = false
-                startEpochMs = System.currentTimeMillis() - frozenSeconds * 1000L
-                updateText()
-            }
-            else -> {
-                stopwatch = intent?.getBooleanExtra(EXTRA_STOPWATCH, true) ?: true
-                startEpochMs = intent?.getLongExtra(EXTRA_START, System.currentTimeMillis())
-                    ?: System.currentTimeMillis()
-                targetEpochMs = intent?.getLongExtra(EXTRA_TARGET, 0L) ?: 0L
-                paused = intent?.getBooleanExtra(EXTRA_PAUSED, false) ?: false
-                frozenSeconds = intent?.getIntExtra(EXTRA_FROZEN, 0) ?: 0
-                title = intent?.getStringExtra(EXTRA_TITLE) ?: ""
-                showOverlay()
-                updateText()
-            }
+        if (intent == null) {
+            stopSelf()
+            return START_NOT_STICKY
         }
-        handler?.removeCallbacks(tick)
-        handler?.postDelayed(tick, 1000)
+        stopwatch = intent.getBooleanExtra(EXTRA_STOPWATCH, false)
+        startEpochMs = intent.getLongExtra(EXTRA_START, System.currentTimeMillis())
+        targetEpochMs = intent.getLongExtra(EXTRA_TARGET, 0L)
+        paused = intent.getBooleanExtra(EXTRA_PAUSED, false)
+        frozenSeconds = intent.getIntExtra(EXTRA_FROZEN, 0)
+        title = intent.getStringExtra(EXTRA_TITLE) ?: ""
+        phase = intent.getStringExtra("phase") ?: "focus"
+        startForeground(NOTIFICATION_ID, timerNotification())
+        FocusTimerEndReceiver.schedule(this, if (paused || stopwatch) 0L else targetEpochMs)
+        if (intent.getBooleanExtra("overlay", false) && Settings.canDrawOverlays(this)) {
+            try { showOverlay() } catch (_: RuntimeException) { removeOverlay() }
+        } else removeOverlay()
+        updateText()
+        handler.removeCallbacks(tick)
+        handler.post(tick)
         return START_NOT_STICKY
+    }
+
+    private fun phaseTitle() = when (phase) {
+        "shortBreak" -> "短休息"
+        "longBreak" -> "长休息"
+        else -> "番茄专注"
+    }
+
+    private fun timerNotification(): Notification {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= 26) {
+            manager.createNotificationChannel(NotificationChannel(
+                CHANNEL, "正在进行的番茄钟", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "通知栏与锁屏计时，不播放声音"
+                setSound(null, null)
+                enableVibration(false)
+            })
+        }
+        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL)
+            else Notification.Builder(this)
+        val launch = packageManager.getLaunchIntentForPackage(packageName)!!
+        val open = PendingIntent.getActivity(this, 4000002, launch,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        builder.setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle(phaseTitle() + if (paused) " · 已暂停" else "")
+            .setContentText(if (title.isBlank()) "点击返回应用" else title)
+            .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true)
+            .setCategory(Notification.CATEGORY_PROGRESS)
+            .setVisibility(Notification.VISIBILITY_PUBLIC)
+        if (paused) {
+            builder.setSubText(format(frozenSeconds)).setShowWhen(false)
+        } else {
+            builder.setWhen(if (stopwatch) startEpochMs else targetEpochMs)
+                .setUsesChronometer(true).setChronometerCountDown(!stopwatch)
+        }
+        if (Build.VERSION.SDK_INT >= 31) {
+            builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE)
+        }
+        return builder.build()
     }
 
     private fun currentSeconds(): Int {
         if (paused) return frozenSeconds
-        val elapsed = ((System.currentTimeMillis() - startEpochMs) / 1000).toInt()
-        return if (elapsed < 0) 0 else elapsed
+        val millis = if (stopwatch) System.currentTimeMillis() - startEpochMs
+            else targetEpochMs - System.currentTimeMillis()
+        return (if (stopwatch) millis / 1000 else kotlin.math.ceil(millis / 1000.0).toLong())
+            .coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
     }
 
     private fun format(seconds: Int): String {
@@ -88,8 +135,7 @@ class FocusOverlayService : Service() {
 
     private fun updateText() {
         timeView?.text = if (paused) "${format(currentSeconds())} · 已暂停" else format(currentSeconds())
-        titleView?.text = if (title.isEmpty()) "专注中" else title
-        titleView?.visibility = if (title.isEmpty()) View.GONE else View.VISIBLE
+        titleView?.text = if (title.isEmpty()) phaseTitle() else title
     }
 
     private fun showOverlay() {
@@ -127,7 +173,8 @@ class FocusOverlayService : Service() {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            if (Build.VERSION.SDK_INT >= 26) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT,
         )
@@ -141,56 +188,63 @@ class FocusOverlayService : Service() {
         var startX = 0
         var startY = 0
         var moved = false
+        val slop = ViewConfiguration.get(this).scaledTouchSlop
         overlayView!!.setOnTouchListener { _, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
                     downRawX = event.rawX; downRawY = event.rawY
                     startX = params.x; startY = params.y; moved = false
-                    false
+                    true
                 }
                 MotionEvent.ACTION_MOVE -> {
                     val dx = event.rawX - downRawX
                     val dy = event.rawY - downRawY
-                    if (abs(dx) > 8 || abs(dy) > 8) {
+                    if (moved || abs(dx) > slop || abs(dy) > slop) {
                         moved = true
-                        params.x = startX + dx.toInt()
-                        params.y = startY + dy.toInt()
-                        windowManager?.updateViewLayout(overlayView, params)
+                        val metrics = resources.displayMetrics
+                        params.x = (startX + dx.toInt()).coerceIn(0,
+                            (metrics.widthPixels - (overlayView?.width ?: 0)).coerceAtLeast(0))
+                        params.y = (startY + dy.toInt()).coerceIn(0,
+                            (metrics.heightPixels - (overlayView?.height ?: 0)).coerceAtLeast(0))
+                        try { windowManager?.updateViewLayout(overlayView, params) }
+                        catch (_: RuntimeException) { removeOverlay() }
                     }
-                    moved
+                    true
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!moved) {
                         val launch = packageManager.getLaunchIntentForPackage(packageName)
                         launch?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(launch)
+                        if (launch != null) startActivity(launch)
                     }
-                    !moved
+                    true
                 }
+                MotionEvent.ACTION_CANCEL -> true
                 else -> false
             }
         }
 
         windowManager?.addView(overlayView, params)
 
-        handler = Handler(Looper.getMainLooper())
     }
 
     private fun removeOverlay() {
-        handler?.removeCallbacks(tick)
-        overlayView?.let { windowManager?.removeView(it) }
+        overlayView?.let { try { windowManager?.removeView(it) } catch (_: RuntimeException) {} }
         overlayView = null
+        timeView = null
+        titleView = null
     }
 
     override fun onDestroy() {
+        handler.removeCallbacks(tick)
         removeOverlay()
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
     companion object {
-        const val ACTION_HIDE = "hide"
-        const val ACTION_PAUSE = "pause"
-        const val ACTION_RESUME = "resume"
+        const val NOTIFICATION_ID = 4000002
+        const val CHANNEL = "pomodoro_running"
         const val EXTRA_STOPWATCH = "stopwatch"
         const val EXTRA_START = "start"
         const val EXTRA_TARGET = "target"

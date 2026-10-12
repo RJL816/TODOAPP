@@ -27,6 +27,7 @@ class ReminderOccurrence {
 
   /// Android 通知渠道（见 [ReminderChannels]）
   final String channel;
+  final bool playSound;
 
   const ReminderOccurrence({
     required this.id,
@@ -36,6 +37,7 @@ class ReminderOccurrence {
     required this.payload,
     required this.target,
     this.channel = ReminderChannels.ddl,
+    this.playSound = true,
   });
 }
 

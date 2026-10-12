@@ -13,7 +13,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 
-import '../models/course.dart';
 import '../models/daily_completion.dart';
 import '../models/todo_item.dart';
 import 'course_service.dart';
@@ -313,10 +312,13 @@ class ReminderService {
     required String title,
     required String body,
     String? payload,
+    String channel = 'reminders',
+    bool playSound = true,
   }) async {
     if (!_initialized) return;
     try {
       if (Platform.isAndroid) {
+        _exactAllowed = await exactAlarmsEnabled();
         await _fln.cancel(id: id);
         await _fln.zonedSchedule(
           id: id,
@@ -324,14 +326,17 @@ class ReminderService {
           body: body,
           payload: payload,
           scheduledDate: tz.TZDateTime.from(fireAt, tz.local),
-          notificationDetails: const NotificationDetails(
-            android: AndroidNotificationDetails(
-              'reminders',
-              '提醒',
-              channelDescription: '待办、课程与考试提醒',
-              importance: Importance.high,
-              priority: Priority.high,
-            ),
+          notificationDetails: NotificationDetails(
+            android: _androidDetails(ReminderOccurrence(
+              id: id,
+              fireAt: fireAt,
+              title: title,
+              body: body,
+              payload: payload ?? '',
+              target: ReminderTarget.todo,
+              channel: channel,
+              playSound: playSound,
+            )),
           ),
           androidScheduleMode: _exactAllowed
               ? AndroidScheduleMode.exactAllowWhileIdle
@@ -370,49 +375,56 @@ class ReminderService {
 
   AndroidNotificationDetails _androidDetails(ReminderOccurrence o,
       {bool withTodoAction = false}) {
-    final (String name, String description, Importance importance,
-            Priority priority, bool vibration) =
-        switch (o.channel) {
-          ReminderChannels.habit => (
-              '习惯打卡提醒',
-              '每日习惯的定时打卡提醒',
-              Importance.defaultImportance,
-              Priority.defaultPriority,
-              false,
-            ),
-          ReminderChannels.pomodoro => (
-              '番茄钟提醒',
-              '专注与休息阶段结束提醒',
-              Importance.high,
-              Priority.high,
-              false,
-            ),
-          ReminderChannels.schedule => (
-              '课程、考试与训练提醒',
-              '上课、考试与训练安排的提前提醒',
-              Importance.high,
-              Priority.high,
-              false,
-            ),
-          _ => (
-              'DDL 与待办提醒',
-              '任务截止与开始时间的提醒',
-              Importance.high,
-              Priority.high,
-              true,
-            ),
-        };
+    final (
+      String name,
+      String description,
+      Importance importance,
+      Priority priority,
+      bool vibration
+    ) = switch (o.channel) {
+      ReminderChannels.habit => (
+          '习惯打卡提醒',
+          '每日习惯的定时打卡提醒',
+          Importance.defaultImportance,
+          Priority.defaultPriority,
+          false,
+        ),
+      ReminderChannels.pomodoro => (
+          '番茄钟提醒',
+          '专注与休息阶段结束提醒',
+          Importance.high,
+          Priority.high,
+          true,
+        ),
+      ReminderChannels.schedule => (
+          '课程、考试与训练提醒',
+          '上课、考试与训练安排的提前提醒',
+          Importance.high,
+          Priority.high,
+          false,
+        ),
+      _ => (
+          'DDL 与待办提醒',
+          '任务截止与开始时间的提醒',
+          Importance.high,
+          Priority.high,
+          true,
+        ),
+    };
     return AndroidNotificationDetails(
-      o.channel,
+      o.channel == ReminderChannels.pomodoro
+          ? (o.playSound ? 'pomodoro_end_v2' : 'pomodoro_end_silent_v2')
+          : o.channel,
       name,
       channelDescription: description,
       importance: importance,
       priority: priority,
-      enableVibration: vibration,
+      enableVibration: vibration && o.playSound,
+      playSound: o.playSound,
       // 待办通知带「完成」按钮：点击直接打卡，不用进 App
       actions: withTodoAction
           ? [
-              AndroidNotificationAction(
+              const AndroidNotificationAction(
                 'mark_done',
                 '完成',
                 showsUserInterface: true, // 回到应用内完成打卡并刷新
@@ -423,6 +435,7 @@ class ReminderService {
   }
 
   Future<void> _scheduleAndroid(List<ReminderOccurrence> occurrences) async {
+    _exactAllowed = await exactAlarmsEnabled();
     await _fln.cancelAll();
     for (final o in occurrences) {
       final isDailyHabit = o.id >= 400000 && o.id < 500000; // habitReminderId 段

@@ -65,12 +65,12 @@ void main() {
   }
 
   for (final dark in [false, true]) {
-    testWidgets('glass supports ${dark ? 'dark' : 'light'} and reduced effects',
+    testWidgets('glass supports ${dark ? 'dark' : 'light'} and high contrast',
         (tester) async {
       await tester.pumpWidget(MaterialApp(
         theme: dark ? ThemeData.dark() : buildAppTheme(),
         home: MediaQuery(
-          data: const MediaQueryData(accessibleNavigation: true),
+          data: const MediaQueryData(highContrast: true),
           child: Scaffold(
               body: Stack(children: [
             const Positioned.fill(child: AmbientBackdrop()),
