@@ -164,6 +164,7 @@ class _MemoPageState extends State<MemoPage> {
       result = await _memoService.getAllMemos();
     }
 
+    if (!mounted) return;
     setState(() => _filteredMemos = result);
   }
 

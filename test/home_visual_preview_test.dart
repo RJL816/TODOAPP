@@ -331,6 +331,128 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('mobile glass stays consistent during touch and scrolling',
+      (tester) async {
+    final previousClarity = GlassTuning.clarity.value;
+    addTearDown(() => GlassTuning.clarity.value = previousClarity);
+    await pumpHome(tester,
+        prefs: {
+          'show_ambient_background': true,
+          'ambient_scene_index': 1,
+          'ambient_scene_auto': false,
+          'glass_clarity': .25,
+        },
+        size: const Size(390, 844),
+        fileName: 'home-stable-glass-390.png');
+
+    final input = find.byType(TextField).first;
+    final inputFilter = find.ancestor(
+        of: input, matching: find.byType(BackdropFilter)).first;
+    final panel = find.ancestor(
+        of: find.text('接下来做'), matching: find.byType(GlassPanel)).first;
+    final panelFilter = find.descendant(
+        of: panel, matching: find.byType(BackdropFilter)).first;
+    final beforeInput = tester.widget<BackdropFilter>(inputFilter);
+    final beforePanel = tester.widget<BackdropFilter>(panelFilter);
+    final beforeDecorations = tester
+        .widgetList<DecoratedBox>(find.descendant(
+            of: panel, matching: find.byType(DecoratedBox)))
+        .map((widget) => widget.decoration)
+        .toList();
+
+    void expectStableGlass() {
+      expect(GlassTuning.clarity.value, .25);
+      for (final (finder, before) in [
+        (inputFilter, beforeInput),
+        (panelFilter, beforePanel),
+      ]) {
+        final current = tester.widget<BackdropFilter>(finder);
+        expect(current.enabled, before.enabled);
+        expect(current.filter, before.filter);
+      }
+      expect(
+          tester
+              .widgetList<DecoratedBox>(find.descendant(
+                  of: panel, matching: find.byType(DecoratedBox)))
+              .map((widget) => widget.decoration)
+              .toList(),
+          beforeDecorations);
+    }
+
+    expectStableGlass();
+    final gesture = await tester.startGesture(tester.getCenter(panel));
+    await tester.pump();
+    expectStableGlass();
+    await gesture.moveBy(const Offset(0, -30));
+    await tester.pump(const Duration(milliseconds: 16));
+    expectStableGlass();
+    await gesture.up();
+    await tester.pump(const Duration(milliseconds: 100));
+    expectStableGlass();
+    await tester.pump(const Duration(milliseconds: 500));
+    expectStableGlass();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Android today glass stays stable while held beyond both edges',
+      (tester) async {
+    final previousClarity = GlassTuning.clarity.value;
+    addTearDown(() => GlassTuning.clarity.value = previousClarity);
+    await pumpHome(tester,
+        prefs: {
+          'show_ambient_background': true,
+          'ambient_scene_index': 1,
+          'ambient_scene_auto': false,
+          'glass_clarity': .25,
+        },
+        size: const Size(390, 844),
+        fileName: 'home-edge-glass-390.png');
+
+    final list = find.byKey(const PageStorageKey<String>('today-scroll'));
+    final scrollable = find.descendant(
+        of: list, matching: find.byType(Scrollable)).first;
+    final position = tester.state<ScrollableState>(scrollable).position;
+    expect(position.maxScrollExtent, greaterThan(0));
+    expect(find.ancestor(
+        of: scrollable, matching: find.byType(StretchingOverscrollIndicator)),
+        findsNothing);
+
+    for (final bottom in [false, true]) {
+      final edge = bottom ? position.maxScrollExtent : position.minScrollExtent;
+      position.jumpTo(edge);
+      await tester.pump();
+      final filters = find.descendant(
+          of: list, matching: find.byType(BackdropFilter));
+      final filter = bottom ? filters.last : filters.first;
+      final before = tester.widget<BackdropFilter>(filter);
+      expect(before.enabled, isTrue);
+
+      final rect = tester.getRect(list);
+      final gesture = await tester.startGesture(
+          Offset(rect.left + 8, rect.center.dy));
+      await gesture.moveBy(Offset(0, bottom ? -25 : 25));
+      await tester.pump();
+      await gesture.moveBy(Offset(0, bottom ? -140 : 140));
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(position.pixels, bottom ? greaterThan(edge) : lessThan(edge));
+      expect(GlassTuning.clarity.value, .25);
+      final held = tester.widget<BackdropFilter>(filter);
+      expect(held.enabled, isTrue);
+      expect(held.filter, before.filter);
+      // Holding an edge must not reintroduce a viewport stretch filter.
+      expect(find.descendant(of: list, matching: find.byType(StretchEffect)),
+          findsNothing);
+
+      await gesture.up();
+      for (var i = 0; i < 30; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(position.pixels, closeTo(edge, .1));
+      expect(GlassTuning.clarity.value, .25);
+      expect(tester.takeException(), isNull);
+    }
+  }, variant: TargetPlatformVariant({TargetPlatform.android}));
+
   testWidgets('compact desktop sidebar keeps all routes accessible',
       (tester) async {
     await pumpHome(tester,

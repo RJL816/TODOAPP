@@ -33,6 +33,7 @@ import 'services/ai_service.dart';
 import 'services/update_service.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'ui/ai_assistant.dart';
+import 'ui/ai_settings_section.dart';
 import 'services/expense_service.dart';
 import 'models/class_time_config.dart';
 import 'models/course.dart';
@@ -339,7 +340,6 @@ class _TodoHomePageState extends State<TodoHomePage>
   ReleaseInfo? _newRelease;
 
   Timer? _updateCheckTimer;
-  Timer? _scrollFreezeTimer; // 滚动冻结的超时自愈
 
   /// 启动静默检查更新：发现新版时提示一次（忽略后同版本不再打扰）
   Future<void> _silentCheckForUpdate() async {
@@ -356,9 +356,9 @@ class _TodoHomePageState extends State<TodoHomePage>
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           duration: const Duration(seconds: 8),
-          content: Text('发现新版本 v${release.version}，可一键更新'),
+          content: Text('发现新版本 v${release.version}，可下载更新'),
           action: SnackBarAction(
-              label: '一键更新',
+              label: Platform.isWindows ? '一键更新' : '下载更新',
               onPressed: () => runInAppUpdate(context, release),
             ),
         ));
@@ -1094,34 +1094,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                             if (wide && !immersiveFocus)
                               _buildDesktopNav(theme),
                             Expanded(
-                                child: NotificationListener<ScrollNotification>(
-                              // 滚动期间冻结实时模糊：防闪烁 + 省模糊开销。
-                              // 超时自愈：个别场景 ScrollEnd 可能丢失，
-                              // 450ms 内无后续滚动事件即解冻，避免永久冻结
-                              onNotification: (notification) {
-                                void freeze() {
-                                  _scrollFreezeTimer?.cancel();
-                                  if (!GlassTuning.scrolling.value) {
-                                    GlassTuning.scrolling.value = true;
-                                  }
-                                  _scrollFreezeTimer = Timer(
-                                      const Duration(milliseconds: 450), () {
-                                    GlassTuning.scrolling.value = false;
-                                  });
-                                }
-
-                                if (notification is ScrollStartNotification ||
-                                    notification
-                                        is ScrollUpdateNotification) {
-                                  freeze();
-                                } else if (notification
-                                    is ScrollEndNotification) {
-                                  _scrollFreezeTimer?.cancel();
-                                  GlassTuning.scrolling.value = false;
-                                }
-                                return false;
-                              },
-                              child: IndexedStack(
+                                child: IndexedStack(
                               index: _currentIndex,
                               children: [
                                 PageFrame(child: _buildTodoListPage(theme)),
@@ -1202,7 +1175,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                                 ),
                               ],
                             ),
-                          )),
+                          ),
                         ]),
                         ),
                       ],
@@ -1733,16 +1706,28 @@ class _TodoHomePageState extends State<TodoHomePage>
         .where((todo) => !todo.isCompleted && todo.isExpired())
         .toList();
 
-    return LayoutBuilder(builder: (context, bounds) {
-      final twoColumn =
-          bounds.maxWidth >= WindowSizeClass.twoColumnMinWidth && _isToday;
-      if (!twoColumn) {
-        return _homeSingleColumn(theme, width, active, completed, expired);
-      }
-      return _homeTwoColumn(
-          theme, width, ambient, palette, active, completed, expired);
-    });
+    // Android's stretch indicator filters the whole viewport into a separate
+    // layer, preventing glass panels from sampling the scene behind the list.
+    // Use positional bounce feedback on this page instead.
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(overscroll: false),
+      child: LayoutBuilder(builder: (context, bounds) {
+        final twoColumn =
+            bounds.maxWidth >= WindowSizeClass.twoColumnMinWidth && _isToday;
+        if (!twoColumn) {
+          return _homeSingleColumn(theme, width, active, completed, expired);
+        }
+        return _homeTwoColumn(
+            theme, width, ambient, palette, active, completed, expired);
+      }),
+    );
   }
+
+  ScrollPhysics _todayScrollPhysics(ThemeData theme) =>
+      theme.platform == TargetPlatform.android
+          ? const BouncingScrollPhysics(
+              parent: AlwaysScrollableScrollPhysics())
+          : const AlwaysScrollableScrollPhysics();
 
   /// 窄内容（小窗/手机/历史日期）：保持原单列流。
   Widget _homeSingleColumn(ThemeData theme, double width, List<TodoItem> active,
@@ -1751,7 +1736,7 @@ class _TodoHomePageState extends State<TodoHomePage>
     final side = width < 680 ? 18.0 : 32.0;
     return ListView(
         key: const PageStorageKey<String>('today-scroll'),
-        physics: const AlwaysScrollableScrollPhysics(),
+        physics: _todayScrollPhysics(theme),
         children: [
           Container(
             width: double.infinity,
@@ -1814,7 +1799,7 @@ class _TodoHomePageState extends State<TodoHomePage>
     final side = width < 680 ? 18.0 : 32.0;
     return ListView(
       key: const PageStorageKey<String>('today-scroll'),
-      physics: const AlwaysScrollableScrollPhysics(),
+      physics: _todayScrollPhysics(theme),
       children: [
         Container(
           width: double.infinity,
@@ -2429,10 +2414,8 @@ class _TodoHomePageState extends State<TodoHomePage>
             child: ClipRRect(
               borderRadius: BorderRadius.circular(18),
               child: ListenableBuilder(
-                listenable: GlassTuning.effectControls,
+                listenable: GlassTuning.clarity,
                 builder: (context, _) => BackdropFilter(
-                  // 滚动冻结：暂停实时模糊（防 Impeller 滚动闪烁）
-                  enabled: !GlassTuning.scrolling.value,
                   filter: ImageFilter.blur(
                     sigmaX: 10 * GlassTuning.blurScale(_glassClarity),
                     sigmaY: 10 * GlassTuning.blurScale(_glassClarity),
@@ -3815,7 +3798,6 @@ class _SettingsDialog extends StatefulWidget {
 }
 
 class _SettingsDialogState extends State<_SettingsDialog> {
-  AiConfig _aiConfig = const AiConfig();
   String _appVersion = '';
   String _updateState = 'idle'; // idle | checking | latest | available | error
   ReleaseInfo? _newRelease;
@@ -3866,12 +3848,6 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
   }
 
-  Future<void> _updateAiConfig(AiConfig config) async {
-    await AiService.instance.saveConfig(config);
-    if (mounted) setState(() => _aiConfig = config);
-    widget.onAiConfigChanged();
-  }
-
   // 字体颜色的本地镜像：showDialog 路由不随父重建，
   // 选择后需要 setState 才能即时看到选中态变化
   late String _localFontMode = widget.fontColorMode;
@@ -3908,9 +3884,6 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     _trayResident = widget.trayResident;
     _loadAppVersion();
     _loadAutoBackupInfo();
-    AiService.instance.loadConfig().then((config) {
-      if (mounted) setState(() => _aiConfig = config);
-    });
   }
 
   Future<void> _saveTrayResident(bool value) async {
@@ -4111,173 +4084,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     ]);
   }
 
-  /// AI 助手配置：端点 / Key / 模型 / 数据上传范围 / 测试连接
-  Widget _aiSection(ThemeData theme) {
-    final config = _aiConfig;
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Icon(Icons.auto_awesome, size: 18, color: theme.colorScheme.primary),
-        const SizedBox(width: 8),
-        Text('AI 助手', style: theme.textTheme.titleSmall),
-        const Spacer(),
-        Switch(
-          value: config.enabled,
-          onChanged: (v) => _updateAiConfig(config.copyWith(enabled: v)),
-        ),
-      ]),
-      if (config.enabled) ...[
-        TextField(
-          controller: TextEditingController(text: config.baseUrl),
-          onSubmitted: (v) =>
-              _updateAiConfig(config.copyWith(baseUrl: v.trim())),
-          decoration: const InputDecoration(
-            isDense: true,
-            labelText: 'API 地址（OpenAI 兼容）',
-            hintText: AiConfig.defaultBaseUrl,
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: TextEditingController(text: config.apiKey),
-          obscureText: true,
-          onSubmitted: (v) =>
-              _updateAiConfig(config.copyWith(apiKey: v.trim())),
-          decoration: InputDecoration(
-            isDense: true,
-            labelText: 'API Key（仅保存在本机）',
-            border: const OutlineInputBorder(),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.check, size: 18),
-              tooltip: '保存',
-              onPressed: () =>
-                  _updateAiConfig(config.copyWith(apiKey: config.apiKey)),
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-            child: TextField(
-              controller: TextEditingController(text: config.model),
-              onSubmitted: (v) =>
-                  _updateAiConfig(config.copyWith(model: v.trim())),
-              decoration: const InputDecoration(
-                isDense: true,
-                labelText: '模型（可选预设或手动输入）',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          PopupMenuButton<String>(
-            tooltip: '常用模型预设',
-            onSelected: (value) {
-              // 选择预设时联动对应的 API 地址
-              final match = AiConfig.modelPresets
-                  .firstWhere((p) => p.$2 == value, orElse: () => ('', '', ''));
-              _updateAiConfig(config.copyWith(
-                  model: value,
-                  baseUrl: match.$3.isEmpty ? config.baseUrl : match.$3));
-            },
-            itemBuilder: (context) => [
-              for (final group
-                  in AiConfig.modelPresets.map((p) => p.$1).toSet()) ...[
-                PopupMenuItem<String>(
-                    enabled: false,
-                    child: Text(group,
-                        style: theme.textTheme.labelSmall
-                            ?.copyWith(color: theme.colorScheme.primary))),
-                for (final (_, model, _)
-                    in AiConfig.modelPresets.where((p) => p.$1 == group))
-                  PopupMenuItem<String>(
-                      value: model,
-                      child: Text(model, style: theme.textTheme.bodyMedium)),
-              ],
-            ],
-            color: AppColors.paper,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 11),
-              decoration: BoxDecoration(
-                border: Border.all(color: theme.colorScheme.outlineVariant),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Icon(Icons.list, size: 16, color: theme.colorScheme.primary),
-                const SizedBox(width: 4),
-                Text('预设',
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ),
-        ]),
-        const SizedBox(height: 12),
-        Text('允许 AI 读取的数据（用于生成建议）', style: theme.textTheme.bodySmall),
-        const SizedBox(height: 4),
-        Wrap(spacing: 6, runSpacing: 4, children: [
-          for (final (key, label) in const [
-            ('scopeTodos', '任务'),
-            ('scopeCourses', '课程'),
-            ('scopeFocus', '专注'),
-            ('scopeTraining', '训练'),
-            ('scopeDiet', '饮食'),
-            ('scopeFatLoss', '减脂目标'),
-          ])
-            FilterChip(
-              label: Text(label),
-              selected: switch (key) {
-                'scopeTodos' => config.scopeTodos,
-                'scopeCourses' => config.scopeCourses,
-                'scopeFocus' => config.scopeFocus,
-                'scopeTraining' => config.scopeTraining,
-                'scopeDiet' => config.scopeDiet,
-                _ => config.scopeFatLoss,
-              },
-              onSelected: (v) => _updateAiConfig(switch (key) {
-                'scopeTodos' => config.copyWith(scopeTodos: v),
-                'scopeCourses' => config.copyWith(scopeCourses: v),
-                'scopeFocus' => config.copyWith(scopeFocus: v),
-                'scopeTraining' => config.copyWith(scopeTraining: v),
-                'scopeDiet' => config.copyWith(scopeDiet: v),
-                _ => config.copyWith(scopeFatLoss: v),
-              }),
-              visualDensity: VisualDensity.compact,
-            ),
-        ]),
-        const SizedBox(height: 10),
-        Row(children: [
-          OutlinedButton.icon(
-            onPressed: () async {
-              try {
-                final reply = await AiService.instance
-                    .testConnection(config)
-                    .timeout(const Duration(seconds: 20));
-                if (mounted) {
-                  ScaffoldMessenger.of(context)
-                      .showSnackBar(SnackBar(content: Text('连接成功：$reply')));
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                      content: Text(
-                          '连接失败：${e.toString().replaceFirst('Exception: ', '')}')));
-                }
-              }
-            },
-            icon: const Icon(Icons.wifi_tethering, size: 16),
-            label: const Text('测试连接'),
-          ),
-        ]),
-        Text(
-            '发送内容为按上面勾选范围构建的今日数据摘要；'
-            'Key 仅保存在本机。悬浮球会在配置完成后出现。',
-            style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant, fontSize: 11)),
-      ],
-      const Divider(),
-    ]);
-  }
+  Widget _aiSection(ThemeData theme) => AiSettingsSection(
+      onConfigChanged: widget.onAiConfigChanged);
 
   Widget _fontColorDot({
     required String label,

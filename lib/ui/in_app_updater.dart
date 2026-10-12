@@ -5,9 +5,25 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../services/update_service.dart';
 
-/// 应用内一键更新：下载安装器（显示进度）→ 静默覆盖安装 → 退出当前应用。
-/// 安装器会读取上次安装目录进行覆盖安装，完成后自动重新启动新版本。
+/// Windows：下载安装器 → 覆盖安装 → 退出，安装器重新启动新版。
+/// Android：打开 APK 下载入口，由系统处理下载与安装。
 Future<void> runInAppUpdate(BuildContext context, ReleaseInfo release) async {
+  if (Theme.of(context).platform != TargetPlatform.windows) {
+    final address = Theme.of(context).platform == TargetPlatform.android
+        ? release.androidUrl ?? release.pageUrl
+        : release.pageUrl;
+    try {
+      final opened = await launchUrl(Uri.parse(address),
+          mode: LaunchMode.externalApplication);
+      if (!opened) throw Exception('无法打开下载入口');
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('无法打开下载入口，请在关于与更新中重试。')));
+      }
+    }
+    return;
+  }
   await showDialog(
     context: context,
     barrierDismissible: false,

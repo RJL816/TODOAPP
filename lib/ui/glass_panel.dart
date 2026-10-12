@@ -21,14 +21,6 @@ abstract final class GlassTuning {
   static const defaultClarity = .55;
   static final ValueNotifier<double> clarity = ValueNotifier(defaultClarity);
 
-  /// 滚动进行中：玻璃退化为预烘焙渐变。
-  /// Android Impeller 上滚动中的实时模糊会丢帧闪烁（卡片瞬间透明又恢复），
-  /// 实时模糊本身也是手机端滚动卡顿的主因——滚动期间统一冻结。
-  static final ValueNotifier<bool> scrolling = ValueNotifier(false);
-
-  static final Listenable effectControls =
-      Listenable.merge([clarity, scrolling]);
-
   /// 手机 GPU 普遍弱于桌面：实时模糊半径整体下调（开销随半径平方增长）
   static final double deviceBlurFactor = Platform.isAndroid
       ? .60
@@ -63,7 +55,7 @@ class GlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: GlassTuning.effectControls,
+        listenable: GlassTuning.clarity,
         builder: (context, _) => _buildPanel(context, GlassTuning.clarity.value),
       );
 
@@ -92,11 +84,6 @@ class GlassPanel extends StatelessWidget {
     final softness =
         (thinGlass ? requestedBlur.clamp(0.0, 9.0) : requestedBlur) *
             GlassTuning.blurScale(clarity);
-    // 滚动冻结：不完全去模糊（那会让玻璃"变最透明"），而是降模糊强度——
-    // 开销随 sigma 平方下降，观感与松手后接近、跳变最小
-    final effectiveSoftness = GlassTuning.scrolling.value
-        ? softness * .45
-        : softness;
     final baseTint = thinGlass
         ? strength * .44
         : level == GlassSurfaceLevel.light
@@ -138,10 +125,9 @@ class GlassPanel extends StatelessWidget {
         : Colors.white.withValues(alpha: isDark ? .30 : .48);
     final highlight = Colors.white.withValues(
         alpha: scene == AmbientPalette.night ? .34 : (isDark ? .56 : .70));
-    // 滚动冻结：实时模糊暂停（保留玻璃 tint 外观）；无障碍模式保留实底可读
+    // 触摸和滚动期间保持用户设置的玻璃效果；无障碍模式保留实底可读。
     final accessibleOnly =
         MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
-    // 滚动冻结 = 只降模糊强度（观感连续），无障碍模式才走实底
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -166,14 +152,14 @@ class GlassPanel extends StatelessWidget {
         child: BackdropFilter(
           enabled: !accessibleOnly,
           filter: ImageFilter.blur(
-            sigmaX: effectiveSoftness,
-            sigmaY: effectiveSoftness,
+            sigmaX: softness,
+            sigmaY: softness,
           ),
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(color: edge),
-              // 无障碍模式走实底保证可读；滚动冻结与正常态共用 tint 渐变
+              // 无障碍模式走实底保证可读。
               gradient: accessibleOnly
                   ? LinearGradient(
                       begin: Alignment.topLeft,
