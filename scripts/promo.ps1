@@ -131,6 +131,21 @@ switch ($Cmd) {
       Start-Sleep -Milliseconds 500
       Write-Output "wheeled $Scroll"
     }
+    'ctrlv' {
+      # 先确保剪贴板有内容（由外部 Set-Clipboard 设置），再向前台发 Ctrl+V
+      Add-Type @'
+using System; using System.Runtime.InteropServices;
+public class K2 { [DllImport("user32.dll")] public static extern void keybd_event(byte k, byte s, uint f, UIntPtr e); }
+'@
+      [K2]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)  # CTRL down
+      Start-Sleep -Milliseconds 60
+      [K2]::keybd_event(0x56, 0, 0, [UIntPtr]::Zero)  # V down
+      Start-Sleep -Milliseconds 60
+      [K2]::keybd_event(0x56, 0, 2, [UIntPtr]::Zero)  # V up
+      [K2]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)  # CTRL up
+      Start-Sleep -Milliseconds 400
+      Write-Output 'ctrl+v sent'
+    }
     'close' {
         Stop-Process -Name todo_app -Force -ErrorAction SilentlyContinue
         Write-Output 'closed'

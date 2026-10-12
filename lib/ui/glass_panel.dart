@@ -92,6 +92,11 @@ class GlassPanel extends StatelessWidget {
     final softness =
         (thinGlass ? requestedBlur.clamp(0.0, 9.0) : requestedBlur) *
             GlassTuning.blurScale(clarity);
+    // 滚动冻结：不完全去模糊（那会让玻璃"变最透明"），而是降模糊强度——
+    // 开销随 sigma 平方下降，观感与松手后接近、跳变最小
+    final effectiveSoftness = GlassTuning.scrolling.value
+        ? softness * .45
+        : softness;
     final baseTint = thinGlass
         ? strength * .44
         : level == GlassSurfaceLevel.light
@@ -136,8 +141,7 @@ class GlassPanel extends StatelessWidget {
     // 滚动冻结：实时模糊暂停（保留玻璃 tint 外观）；无障碍模式保留实底可读
     final accessibleOnly =
         MediaQuery.maybeOf(context)?.accessibleNavigation ?? false;
-    final reduceEffects =
-        accessibleOnly || GlassTuning.scrolling.value;
+    // 滚动冻结 = 只降模糊强度（观感连续），无障碍模式才走实底
     return DecoratedBox(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(radius),
@@ -160,14 +164,16 @@ class GlassPanel extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(radius),
         child: BackdropFilter(
-          enabled: !reduceEffects,
-          filter: ImageFilter.blur(sigmaX: softness, sigmaY: softness),
+          enabled: !accessibleOnly,
+          filter: ImageFilter.blur(
+            sigmaX: effectiveSoftness,
+            sigmaY: effectiveSoftness,
+          ),
           child: DecoratedBox(
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(radius),
               border: Border.all(color: edge),
-              // 冻结（滚动/无障碍）时保留玻璃 tint 渐变、仅去掉实时模糊：
-              // 与松手后的玻璃观感一致，不再跳变成实色块
+              // 无障碍模式走实底保证可读；滚动冻结与正常态共用 tint 渐变
               gradient: accessibleOnly
                   ? LinearGradient(
                       begin: Alignment.topLeft,
@@ -193,7 +199,7 @@ class GlassPanel extends StatelessWidget {
               fit: StackFit.passthrough,
               children: [
                 // 环境反射：顶左角一束极弱的天光
-                if (!reduceEffects)
+                if (!accessibleOnly)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: DecoratedBox(
@@ -212,7 +218,7 @@ class GlassPanel extends StatelessWidget {
                     ),
                   ),
                 // 深玻璃底缘的暖光回弹（室内灯光打在玻璃下沿）
-                if (isDark && !reduceEffects)
+                if (isDark && !accessibleOnly)
                   Positioned.fill(
                     child: IgnorePointer(
                       child: DecoratedBox(

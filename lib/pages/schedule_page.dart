@@ -291,6 +291,7 @@ class _SchedulePageState extends State<SchedulePage> {
       context: context,
       builder: (context) => _CourseManageDialog(
         courses: courses,
+        semesterName: _semesterConfig?.name ?? '',
         onAdd: (course) async {
           await _courseService.addCourse(course);
         },
@@ -1410,12 +1411,14 @@ class _CourseManageDialog extends StatefulWidget {
   final Future<void> Function(Course) onAdd;
   final Future<void> Function(Course) onUpdate;
   final Future<void> Function(int) onDelete;
+  final String semesterName;
 
   const _CourseManageDialog({
     required this.courses,
     required this.onAdd,
     required this.onUpdate,
     required this.onDelete,
+    required this.semesterName,
   });
 
   @override
@@ -1441,6 +1444,8 @@ class _CourseManageDialogState extends State<_CourseManageDialog> {
       builder: (context) => const _CourseEditDialog(),
     );
     if (course != null) {
+      // 手动添加的课程归入当前活跃学期，避免被学期过滤隐藏
+      course.semester = widget.semesterName;
       await widget.onAdd(course);
       setState(() => _courses.add(course));
     }
