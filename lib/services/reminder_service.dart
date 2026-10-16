@@ -38,7 +38,8 @@ class ReminderService {
 
   static const String courseRemindEnabledKey = 'course_remind_enabled';
 
-  final FlutterLocalNotificationsPlugin _fln = FlutterLocalNotificationsPlugin();
+  final FlutterLocalNotificationsPlugin _fln =
+      FlutterLocalNotificationsPlugin();
 
   /// 惰性获取：local_notifier 实例化时会注册平台回调，
   /// 延迟到 Windows 初始化时再触碰，避免单元测试环境缺 Binding 报错
@@ -117,6 +118,15 @@ class ReminderService {
         _onNotificationResponse(launch!.notificationResponse!);
       }
     } else if (Platform.isWindows) {
+      try {
+        final icon = await prepareTrayIcon();
+        if (icon != null) {
+          await const MethodChannel('com.todo.app/autostart')
+              .invokeMethod('refreshNotificationIdentity', {'iconPath': icon});
+        }
+      } catch (e) {
+        debugPrint('通知图标刷新失败：$e');
+      }
       await _localNotifier.setup(appName: AppIdentity.fullName);
       _notificationsAllowed = true;
       _exactAllowed = true; // 进程内定时器即精确
@@ -162,7 +172,8 @@ class ReminderService {
     if (!Platform.isAndroid) return _notificationsAllowed;
     final androidImpl = _fln.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    return await androidImpl?.areNotificationsEnabled() ?? _notificationsAllowed;
+    return await androidImpl?.areNotificationsEnabled() ??
+        _notificationsAllowed;
   }
 
   Future<bool> exactAlarmsEnabled() async {
@@ -498,7 +509,7 @@ class ReminderService {
     if (!Platform.isWindows) return null;
     try {
       final dir = await getApplicationSupportDirectory();
-      final iconFile = File('${dir.path}/tray_icon.ico');
+      final iconFile = File('${dir.path}/dayloom-notification-v2.ico');
       // 每次启动都覆盖写入：应用升级后托盘图标随之更新
       final data = await rootBundle.load('assets/tray_icon.ico');
       await iconFile.writeAsBytes(

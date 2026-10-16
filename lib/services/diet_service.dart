@@ -83,6 +83,7 @@ class DietService {
       count: logs.length,
       calories: calories,
       hasCalorieData: calorieEntries > 0,
+      missingCalorieEntries: logs.length - calorieEntries,
       proteinGrams: protein,
       carbsGrams: carbs,
       fatGrams: fat,
@@ -95,6 +96,7 @@ class DietDaySummary {
   final int count;
   final int calories;
   final bool hasCalorieData;
+  final int missingCalorieEntries;
   final int proteinGrams;
   final int carbsGrams;
   final int fatGrams;
@@ -103,6 +105,7 @@ class DietDaySummary {
     required this.count,
     required this.calories,
     required this.hasCalorieData,
+    this.missingCalorieEntries = 0,
     required this.proteinGrams,
     required this.carbsGrams,
     required this.fatGrams,

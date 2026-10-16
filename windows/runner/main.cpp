@@ -4,6 +4,7 @@
 
 #include "flutter_window.h"
 #include "utils.h"
+#include "notification_identity.h"
 
 #include <flutter/method_channel.h>
 #include <flutter/standard_method_codec.h>
@@ -139,7 +140,18 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
       [](const flutter::MethodCall<flutter::EncodableValue>& call,
          std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
              result) {
-        if (call.method_name() == "setAutoStart") {
+        if (call.method_name() == "refreshNotificationIdentity") {
+          const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+          bool updated = false;
+          if (args) {
+            auto it = args->find(flutter::EncodableValue("iconPath"));
+            if (it != args->end()) {
+              const auto* path = std::get_if<std::string>(&it->second);
+              if (path) updated = RefreshNotificationIdentity(*path);
+            }
+          }
+          result->Success(flutter::EncodableValue(updated));
+        } else if (call.method_name() == "setAutoStart") {
           const auto* arguments =
               std::get_if<flutter::EncodableMap>(call.arguments());
           bool enable = false;

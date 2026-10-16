@@ -88,6 +88,8 @@ class PlanExercise {
 
   /// 计划组数
   int plannedSets = 3;
+  int? plannedReps;
+  int? plannedWeightGrams;
 
   /// 备注（目标重量等）
   String? notes;
@@ -98,6 +100,8 @@ class PlanExercise {
     required this.planId,
     required this.name,
     this.plannedSets = 3,
+    this.plannedReps,
+    this.plannedWeightGrams,
     this.notes,
   });
 
@@ -106,6 +110,8 @@ class PlanExercise {
         'planId': planId,
         'name': name,
         'plannedSets': plannedSets,
+        'plannedReps': plannedReps,
+        'plannedWeightGrams': plannedWeightGrams,
         'notes': notes,
       };
 
@@ -114,6 +120,8 @@ class PlanExercise {
     ..planId = (json['planId'] as int?) ?? 0
     ..name = (json['name'] as String?) ?? ''
     ..plannedSets = (json['plannedSets'] as int?) ?? 3
+    ..plannedReps = json['plannedReps'] as int?
+    ..plannedWeightGrams = json['plannedWeightGrams'] as int?
     ..notes = json['notes'] as String?;
 }
 
@@ -142,6 +150,11 @@ class WorkoutLog {
   /// 是否完整完成
   late bool completed;
 
+  /// 完成时按身体档案与组记录计算的净运动热量；历史缺失不补造。
+  int? estimatedCalories;
+  double? calorieWeightKg;
+  double? estimatedMinutes;
+
   WorkoutLog();
 
   WorkoutLog.create({
@@ -161,6 +174,9 @@ class WorkoutLog {
         'startedAt': startedAt.toIso8601String(),
         'endedAt': endedAt?.toIso8601String(),
         'completed': completed,
+        'estimatedCalories': estimatedCalories,
+        'calorieWeightKg': calorieWeightKg,
+        'estimatedMinutes': estimatedMinutes,
       };
 
   factory WorkoutLog.fromJson(Map<String, dynamic> json) => WorkoutLog()
@@ -174,6 +190,9 @@ class WorkoutLog {
     ..endedAt = json['endedAt'] == null
         ? null
         : DateTime.parse(json['endedAt'] as String)
+    ..estimatedCalories = json['estimatedCalories'] as int?
+    ..calorieWeightKg = (json['calorieWeightKg'] as num?)?.toDouble()
+    ..estimatedMinutes = (json['estimatedMinutes'] as num?)?.toDouble()
     ..completed = (json['completed'] as bool?) ?? true;
 }
 

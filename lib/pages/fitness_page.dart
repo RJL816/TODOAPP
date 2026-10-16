@@ -158,9 +158,8 @@ class _FitnessPageState extends State<FitnessPage> {
   }
 
   Widget _reminderMenu() {
-    final remindLabel = _remindEnabled
-        ? '训练提醒 · 每天 ${_remindTimeLabel}'
-        : '训练提醒 · 已关闭';
+    final remindLabel =
+        _remindEnabled ? '训练提醒 · 每天 ${_remindTimeLabel}' : '训练提醒 · 已关闭';
     return PopupMenuButton<String>(
       tooltip: '训练提醒设置',
       onSelected: (value) {
@@ -208,8 +207,7 @@ class _FitnessPageState extends State<FitnessPage> {
   }
 
   String get _remindTimeLabel {
-    final minutes =
-        _remindMinutes ?? TrainingService.defaultRemindMinutes;
+    final minutes = _remindMinutes ?? TrainingService.defaultRemindMinutes;
     final h = (minutes ~/ 60).toString().padLeft(2, '0');
     final m = (minutes % 60).toString().padLeft(2, '0');
     return '$h:$m';
@@ -303,7 +301,7 @@ class _FitnessPageState extends State<FitnessPage> {
 
   // ==================== 训练进行 ====================
 
-  Future<void> _startWorkout(TrainingPlan? plan) async {
+  Future<void> _startWorkout(TrainingPlan? plan, {bool manual = false}) async {
     final exercises = plan != null
         ? await _svc.getExercisesForPlan(plan.id)
         : <PlanExercise>[];
@@ -312,6 +310,7 @@ class _FitnessPageState extends State<FitnessPage> {
       builder: (context) => _WorkoutSessionPage(
         plan: plan,
         plannedExercises: exercises,
+        manual: manual,
       ),
     ));
     await _loadData();
@@ -327,7 +326,8 @@ class _FitnessPageState extends State<FitnessPage> {
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(log.title),
+        title: Text(
+            '${log.title}${log.estimatedCalories == null ? '' : ' · 净消耗约 ${log.estimatedCalories} 千卡'}'),
         content: SizedBox(
           width: 440,
           height: 400,
@@ -420,6 +420,10 @@ class _FitnessPageState extends State<FitnessPage> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant)),
           const SizedBox(height: 18),
           Wrap(spacing: 10, runSpacing: 8, children: [
+            TextButton.icon(
+                onPressed: () => _startWorkout(null, manual: true),
+                icon: const Icon(Icons.playlist_add_check),
+                label: const Text('手动记录已完成训练')),
             GlassPanel(
               level: GlassSurfaceLevel.light,
               radius: 14,
@@ -434,12 +438,16 @@ class _FitnessPageState extends State<FitnessPage> {
                     Icon(Icons.add, size: 19, color: theme.colorScheme.primary),
                     const SizedBox(width: 6),
                     Text('创建训练循环',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.colorScheme.primary)),
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: theme.colorScheme.primary)),
                   ]),
                 ),
               ),
             ),
+            TextButton.icon(
+                onPressed: () => _startWorkout(null, manual: true),
+                icon: const Icon(Icons.playlist_add_check),
+                label: const Text('手动记录已完成训练')),
             GlassPanel(
               level: GlassSurfaceLevel.light,
               radius: 14,
@@ -455,8 +463,8 @@ class _FitnessPageState extends State<FitnessPage> {
                         size: 19, color: theme.colorScheme.primary),
                     const SizedBox(width: 6),
                     Text('开始自由训练',
-                        style: theme.textTheme.labelLarge?.copyWith(
-                            color: theme.colorScheme.primary)),
+                        style: theme.textTheme.labelLarge
+                            ?.copyWith(color: theme.colorScheme.primary)),
                   ]),
                 ),
               ),
@@ -469,7 +477,8 @@ class _FitnessPageState extends State<FitnessPage> {
             _sectionTitle(theme, '训练历史'),
             for (final log in _history.take(10))
               ListTile(
-                  title: Text(log.title),
+                  title: Text(
+                      '${log.title}${log.estimatedCalories == null ? '' : ' · 净消耗约 ${log.estimatedCalories} 千卡'}'),
                   subtitle:
                       Text('${log.startedAt.month}月${log.startedAt.day}日'),
                   onTap: () => _viewWorkout(log)),
@@ -626,7 +635,8 @@ class _FitnessPageState extends State<FitnessPage> {
                         : Theme.of(context).colorScheme.onSurfaceVariant,
                     size: 20,
                   ),
-                  title: Text(log.title),
+                  title: Text(
+                      '${log.title}${log.estimatedCalories == null ? '' : ' · 净消耗约 ${log.estimatedCalories} 千卡'}'),
                   subtitle: Text(
                       '${log.startedAt.month}-${log.startedAt.day} ${log.startedAt.hour.toString().padLeft(2, '0')}:${log.startedAt.minute.toString().padLeft(2, '0')}'),
                   onTap: () => _viewWorkout(log),
@@ -686,7 +696,12 @@ class _FitnessPageState extends State<FitnessPage> {
               );
             },
           ),
-          const SizedBox(height: 22),
+          const SizedBox(height: 12),
+          TextButton.icon(
+              onPressed: () => _startWorkout(plan, manual: true),
+              icon: const Icon(Icons.check_circle_outline),
+              label: const Text('已练完，手动补记')),
+          const SizedBox(height: 10),
           FilledButton.icon(
             onPressed: () => _startWorkout(plan),
             icon: const Icon(Icons.play_arrow),
@@ -911,10 +926,12 @@ class _FitnessPageState extends State<FitnessPage> {
 class _WorkoutSessionPage extends StatefulWidget {
   final TrainingPlan? plan;
   final List<PlanExercise> plannedExercises;
+  final bool manual;
 
   const _WorkoutSessionPage({
     required this.plan,
     required this.plannedExercises,
+    this.manual = false,
   });
 
   @override
@@ -924,6 +941,9 @@ class _WorkoutSessionPage extends StatefulWidget {
 class _WorkoutSessionPageState extends State<_WorkoutSessionPage> {
   final TrainingService _svc = TrainingService.instance;
   late DateTime _startedAt;
+  bool _saving = false;
+  final _minutes = TextEditingController();
+  String? _error;
   final List<_SessionExercise> _exercises = [];
 
   @override
@@ -933,13 +953,33 @@ class _WorkoutSessionPageState extends State<_WorkoutSessionPage> {
     for (final pe in widget.plannedExercises) {
       final ex = _SessionExercise(name: pe.name);
       for (int i = 1; i <= pe.plannedSets; i++) {
-        ex.sets.add(_SessionSet());
+        final set = _SessionSet();
+        set.repsController.text = pe.plannedReps?.toString() ?? '';
+        set.weightController.text = pe.plannedWeightGrams == null
+            ? ''
+            : '${pe.plannedWeightGrams! / 1000}';
+        ex.sets.add(set);
       }
       _exercises.add(ex);
     }
     if (_exercises.isEmpty) {
       _exercises.add(_SessionExercise(name: ''));
     }
+  }
+
+  @override
+  void dispose() {
+    _minutes.dispose();
+    for (final ex in _exercises) {
+      ex.nameController.dispose();
+      for (final set in ex.sets) {
+        set.repsController.dispose();
+        set.weightController.dispose();
+        set.durationController.dispose();
+        set.notesController.dispose();
+      }
+    }
+    super.dispose();
   }
 
   void _addExercise() {
@@ -970,48 +1010,96 @@ class _WorkoutSessionPageState extends State<_WorkoutSessionPage> {
   }
 
   Future<void> _finish() async {
+    if (_saving) return;
+    final duration = double.tryParse(_minutes.text.trim());
+    if (_minutes.text.trim().isNotEmpty &&
+        (duration == null ||
+            !duration.isFinite ||
+            duration <= 0 ||
+            duration > 600)) {
+      setState(() => _error = '训练时长请输入 0–600 分钟内的正数');
+      return;
+    }
     final log = WorkoutLog.create(
       date: DateTime.now(),
       title: widget.plan?.name ?? '自由训练',
       startedAt: _startedAt,
-      endedAt: DateTime.now(),
+      endedAt: widget.manual ? null : DateTime.now(),
       planId: widget.plan?.id,
       completed: true,
     );
+    log.estimatedMinutes = duration;
     final sets = <WorkoutSet>[];
     for (final ex in _exercises) {
       final name = ex.nameController.text.trim();
       if (name.isEmpty) continue;
       for (int i = 0; i < ex.sets.length; i++) {
         final s = ex.sets[i];
-        final hasData = (s.repsController.text.trim().isNotEmpty &&
-                int.tryParse(s.repsController.text.trim()) != null) ||
-            (s.weightController.text.trim().isNotEmpty &&
-                double.tryParse(s.weightController.text.trim()) != null) ||
-            (s.durationController.text.trim().isNotEmpty &&
-                int.tryParse(s.durationController.text.trim()) != null) ||
-            (s.notesController.text.trim().isNotEmpty);
-        if (!hasData) continue;
+        final repsText = s.repsController.text.trim();
+        final weightText = s.weightController.text.trim();
+        final minutesText = s.durationController.text.trim();
+        if ([repsText, weightText, minutesText, s.notesController.text.trim()]
+            .every((v) => v.isEmpty)) continue;
+        final reps = int.tryParse(repsText);
+        final weight = double.tryParse(weightText);
+        final minutes = double.tryParse(minutesText);
+        if ((repsText.isNotEmpty &&
+                (reps == null || reps <= 0 || reps > 1000)) ||
+            (weightText.isNotEmpty &&
+                (weight == null ||
+                    !weight.isFinite ||
+                    weight < 0 ||
+                    weight > 1000)) ||
+            (minutesText.isNotEmpty &&
+                (minutes == null ||
+                    !minutes.isFinite ||
+                    minutes <= 0 ||
+                    minutes > 600))) {
+          setState(() =>
+              _error = '请检查第 ${i + 1} 组：次数需为正整数，重量 0–1000kg，时长为正数且不超过 600 分钟');
+          return;
+        }
         sets.add(WorkoutSet.create(
           workoutId: 0,
           exerciseName: name,
           setIndex: i + 1,
-          reps: int.tryParse(s.repsController.text.trim()),
-          weightGrams: s.weightController.text.trim().isEmpty
-              ? null
-              : ((double.tryParse(s.weightController.text.trim()) ?? 0) * 1000)
-                  .round(),
-          durationSeconds: int.tryParse(s.durationController.text.trim()),
+          reps: reps,
+          weightGrams: weight == null ? null : (weight * 1000).round(),
+          durationSeconds: minutes == null ? null : (minutes * 60).round(),
           notes: s.notesController.text.trim().isEmpty
               ? null
               : s.notesController.text.trim(),
         ));
       }
     }
-    await _svc.saveWorkout(log: log, sets: sets);
+    if (sets.isEmpty ||
+        sets.any((s) =>
+            (s.reps ?? 0) < 0 ||
+            (s.weightGrams ?? 0) < 0 ||
+            (s.durationSeconds ?? 0) < 0 ||
+            ((s.reps ?? 0) == 0 && (s.durationSeconds ?? 0) == 0))) {
+      setState(() => _error = '请至少填写一个动作的有效次数或时长，重量不能为负数');
+      return;
+    }
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+    try {
+      await _svc.saveWorkout(log: log, sets: sets);
+    } catch (_) {
+      if (mounted)
+        setState(() {
+          _saving = false;
+          _error = '训练保存失败，请重试';
+        });
+      return;
+    }
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('训练已记录（${sets.length} 组）')),
+        SnackBar(
+            content: Text(
+                '训练已记录（${sets.length} 组）${log.estimatedCalories == null ? '；设置身体档案后可估算消耗' : '，净消耗约 ${log.estimatedCalories} 千卡'}')),
       );
       Navigator.pop(context);
     }
@@ -1024,10 +1112,11 @@ class _WorkoutSessionPageState extends State<_WorkoutSessionPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('训练中：${widget.plan?.name ?? '自由训练'}'),
+        title: Text(
+            '${widget.manual ? '补记训练' : '训练中'}：${widget.plan?.name ?? '自由训练'}'),
         actions: [
           TextButton(
-            onPressed: _finish,
+            onPressed: _saving ? null : _finish,
             child: const Text('完成训练'),
           ),
         ],
@@ -1047,6 +1136,19 @@ class _WorkoutSessionPageState extends State<_WorkoutSessionPage> {
                   ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
+            TextField(
+                controller: _minutes,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(
+                    labelText: '本次训练总时长（分钟，可选）',
+                    helperText: '不填时按动作次数、节奏与组间休息粗估；填写实际时长更可靠')),
+            const SizedBox(height: 8),
+            Text('完成后按动作、组数、次数/时长、负重和档案体重粗估净运动消耗；结果仅供参考。',
+                style: theme.textTheme.bodySmall),
+            if (_error != null)
+              Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+            if (_saving) const LinearProgressIndicator(),
             ..._exercises.asMap().entries.map((entry) {
               final index = entry.key;
               final ex = entry.value;

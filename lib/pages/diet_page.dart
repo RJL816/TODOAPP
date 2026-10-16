@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import '../ui/frosted_form_dialog.dart';
 
@@ -5,6 +6,9 @@ import '../models/diet_log.dart';
 import '../services/diet_service.dart';
 import '../services/fat_loss_service.dart';
 import '../ui/glass_panel.dart';
+import '../ui/food_estimation_panel.dart';
+import '../services/energy_service.dart';
+import '../services/training_service.dart';
 
 /// 饮食页：按日期记录四餐，营养字段可选；只做记录与回顾
 class DietPage extends StatefulWidget {
@@ -27,6 +31,10 @@ class _DietPageState extends State<DietPage> {
       fatGrams: 0);
   bool _isLoading = true;
   FatLossProfile? _fatProfile;
+  int _trainingCalories = 0;
+  int _unknownTraining = 0;
+  int _loadGeneration = 0;
+  StreamSubscription<void>? _trainingUpdates;
 
   bool get _isToday {
     final now = DateTime.now();
@@ -38,6 +46,10 @@ class _DietPageState extends State<DietPage> {
   @override
   void initState() {
     super.initState();
+    _trainingUpdates =
+        TrainingService.instance.watchWorkoutChanges().listen((_) {
+      if (mounted) _loadData();
+    });
     _loadData();
     _loadFatProfile();
   }
@@ -47,22 +59,44 @@ class _DietPageState extends State<DietPage> {
     if (mounted) setState(() => _fatProfile = profile);
   }
 
+  @override
+  void dispose() {
+    _trainingUpdates?.cancel();
+    _loadGeneration++;
+    super.dispose();
+  }
+
   Future<void> _loadData() async {
+    final generation = ++_loadGeneration;
+    final date = _date;
     setState(() => _isLoading = true);
-    final logs = await _svc.getLogsForDate(_date);
-    _summary = await _svc.getSummaryForDate(_date);
-    final grouped = <MealType, List<DietLog>>{};
-    for (final type in MealType.values) {
-      grouped[type] = [];
-    }
-    for (final log in logs) {
-      grouped[log.mealType]!.add(log);
-    }
-    if (mounted) {
-      setState(() {
-        _logsByMeal = grouped;
-        _isLoading = false;
-      });
+    try {
+      final logs = await _svc.getLogsForDate(date);
+      final workouts = await TrainingService.instance.getCompletedForDate(date);
+      final summary = await _svc.getSummaryForDate(date);
+      final grouped = <MealType, List<DietLog>>{
+        for (final type in MealType.values) type: [],
+      };
+      for (final log in logs) {
+        grouped[log.mealType]!.add(log);
+      }
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _summary = summary;
+          _trainingCalories =
+              workouts.fold(0, (sum, w) => sum + (w.estimatedCalories ?? 0));
+          _unknownTraining =
+              workouts.where((w) => w.estimatedCalories == null).length;
+          _logsByMeal = grouped;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('饮食与训练数据加载失败，请重试')));
+      }
     }
   }
 
@@ -274,7 +308,8 @@ class _DietPageState extends State<DietPage> {
   /// 减脂计划卡：目标热量 / 三大营养素 / 今日进度；未设置时给引导入口
   Widget _fatLossCard(ThemeData theme) {
     final profile = _fatProfile;
-    final targets = profile == null ? null : FatLossService.computeTargets(profile);
+    final targets =
+        profile == null ? null : FatLossService.computeTargets(profile);
     return GlassPanel(
       level: GlassSurfaceLevel.light,
       radius: 18,
@@ -290,33 +325,31 @@ class _DietPageState extends State<DietPage> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('减脂计划', style: theme.textTheme.titleSmall),
+                        Text('身体档案与热量收支', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 2),
-                        Text('按身体数据计算每日热量与三大营养素目标',
+                        Text('录入身高、体重与年龄，比较摄入和训练消耗',
                             style: theme.textTheme.bodySmall?.copyWith(
-                                color:
-                                    theme.colorScheme.onSurfaceVariant)),
+                                color: theme.colorScheme.onSurfaceVariant)),
                       ]),
                 ),
                 TextButton(
-                    onPressed: _editFatProfile,
-                    child: const Text('开始设置')),
+                    onPressed: _editFatProfile, child: const Text('开始设置')),
               ])
             : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Row(children: [
                   Icon(Icons.track_changes,
                       color: theme.colorScheme.primary, size: 20),
                   const SizedBox(width: 8),
-                  Text('减脂计划', style: theme.textTheme.titleSmall),
+                  Text('身体档案与热量收支', style: theme.textTheme.titleSmall),
                   const Spacer(),
                   TextButton(
                       onPressed: _editFatProfile, child: const Text('编辑')),
                 ]),
                 const SizedBox(height: 8),
-                Row(children: [
+                Wrap(spacing: 14, runSpacing: 6, children: [
                   Text('每日目标 ${targets.targetKcal} 千卡',
-                      style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.w600)),
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w600)),
                   const SizedBox(width: 14),
                   Text(
                       _isToday
@@ -348,6 +381,31 @@ class _DietPageState extends State<DietPage> {
                       style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant)),
                 ]),
+                const SizedBox(height: 12),
+                Text('全天预计消耗 ${(targets.tdee + _trainingCalories).round()} 千卡',
+                    style: theme.textTheme.titleSmall),
+                Text(
+                    '日常消耗 ${targets.tdee.round()} + 已完成训练净消耗约 $_trainingCalories 千卡',
+                    style: theme.textTheme.bodySmall),
+                if (!_summary.hasCalorieData ||
+                    _summary.missingCalorieEntries > 0)
+                  Text('摄入尚未完整记录，暂不计算热量差额。', style: theme.textTheme.bodySmall)
+                else
+                  Text(
+                      '已记录摄入 ${_summary.calories} 千卡 · '
+                      '${_summary.calories > targets.tdee + _trainingCalories ? '高于' : '低于'}全天预计消耗 '
+                      '${(_summary.calories - targets.tdee - _trainingCalories).abs().round()} 千卡',
+                      style: theme.textTheme.bodySmall),
+                if (_unknownTraining > 0)
+                  Text('$_unknownTraining 次训练缺少估算资料，尚未计入消耗。',
+                      style: theme.textTheme.bodySmall),
+                Text(
+                    EnergyService.advice(
+                        intake: _summary.calories,
+                        missingEntries: _summary.missingCalorieEntries,
+                        expenditure: targets.tdee + _trainingCalories,
+                        isToday: _isToday),
+                    style: theme.textTheme.bodySmall),
                 const SizedBox(height: 6),
                 Text('计算仅供参考，不构成医疗建议；体重明显变化后请重新设置。',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -361,8 +419,7 @@ class _DietPageState extends State<DietPage> {
   Future<void> _editFatProfile() async {
     final result = await showDialog<FatLossProfile>(
       context: context,
-      builder: (context) =>
-          _FatLossProfileDialog(existing: _fatProfile),
+      builder: (context) => _FatLossProfileDialog(existing: _fatProfile),
     );
     if (result != null) {
       await FatLossService.instance.saveProfile(result);
@@ -453,6 +510,7 @@ class _DietEditDialogState extends State<_DietEditDialog> {
   late TextEditingController _carbsController;
   late TextEditingController _fatController;
   late MealType _meal;
+  bool _estimating = false;
 
   @override
   void initState() {
@@ -489,10 +547,25 @@ class _DietEditDialogState extends State<_DietEditDialog> {
       );
       return;
     }
+    for (final field in [
+      _caloriesController,
+      _proteinController,
+      _carbsController,
+      _fatController
+    ]) {
+      if (field.text.trim().isNotEmpty &&
+          (int.tryParse(field.text.trim()) == null ||
+              int.parse(field.text.trim()) < 0 ||
+              int.parse(field.text.trim()) > 10000)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('营养数据请输入 0–10000 之间的整数')));
+        return;
+      }
+    }
     final log = widget.existing ??
         DietLog.create(date: widget.date, mealType: _meal, food: food)
       ..date = DateTime(widget.date.year, widget.date.month, widget.date.day)
-      ..createdAt = DateTime.now();
+      ..createdAt = widget.existing?.createdAt ?? DateTime.now();
     log.mealType = _meal;
     log.food = food;
     log.notes = _notesController.text.trim().isEmpty
@@ -535,6 +608,25 @@ class _DietEditDialogState extends State<_DietEditDialog> {
                   border: OutlineInputBorder(),
                 ),
               ),
+              FoodEstimationPanel(
+                foodController: _foodController,
+                onBusy: (value) => setState(() => _estimating = value),
+                onEstimate: (estimate) {
+                  setState(() {
+                    _foodController.text = estimate.food;
+                    _caloriesController.text = '${estimate.calories}';
+                    _proteinController.text =
+                        estimate.protein?.toString() ?? '';
+                    _carbsController.text = estimate.carbs?.toString() ?? '';
+                    _fatController.text = estimate.fat?.toString() ?? '';
+                    final previous = _notesController.text.trim();
+                    _notesController.text = [
+                      if (previous.isNotEmpty) previous,
+                      '热量估算：${estimate.explanation}'
+                    ].join('\n');
+                  });
+                },
+              ),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -570,7 +662,7 @@ class _DietEditDialogState extends State<_DietEditDialog> {
               ),
               const SizedBox(height: 4),
               Text(
-                '营养字段全部可选——只做记录，不会生成饮食目标',
+                '估算结果可修改，确认保存后才计入当天摄入；包装食品优先使用营养标签。',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                     color: Theme.of(context).colorScheme.onSurfaceVariant),
               ),
@@ -583,7 +675,8 @@ class _DietEditDialogState extends State<_DietEditDialog> {
           onPressed: () => Navigator.pop(context),
           child: const Text('取消'),
         ),
-        FilledButton(onPressed: _save, child: const Text('保存')),
+        FilledButton(
+            onPressed: _estimating ? null : _save, child: const Text('保存')),
       ],
     );
   }
@@ -625,8 +718,8 @@ class _FatLossProfileDialogState extends State<_FatLossProfileDialog> {
     (1.725, '高强度'),
   ];
   static const deficits = [
-    (300, '温和 · 每月约 1.2kg'),
-    (500, '标准 · 每月约 2kg'),
+    (300, '温和 · 每日 300 千卡'),
+    (500, '标准 · 每日 500 千卡'),
     (750, '激进 · 需谨慎'),
   ];
 
@@ -655,11 +748,14 @@ class _FatLossProfileDialogState extends State<_FatLossProfileDialog> {
     final height = double.tryParse(_height.text.trim());
     final weight = double.tryParse(_weight.text.trim());
     if (age == null ||
-        age <= 0 ||
+        age < 18 ||
+        age > 100 ||
         height == null ||
+        !height.isFinite ||
         height < 100 ||
         height > 250 ||
         weight == null ||
+        !weight.isFinite ||
         weight < 30 ||
         weight > 300) {
       return null;
@@ -678,7 +774,7 @@ class _FatLossProfileDialogState extends State<_FatLossProfileDialog> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AlertDialog(
-      title: const Text('减脂计划设置'),
+      title: const Text('身体档案与目标（成人）'),
       content: SizedBox(
         width: 380,
         child: SingleChildScrollView(
@@ -712,16 +808,14 @@ class _FatLossProfileDialogState extends State<_FatLossProfileDialog> {
                         controller: _height,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                            labelText: '身高 cm',
-                            border: OutlineInputBorder()))),
+                            labelText: '身高 cm', border: OutlineInputBorder()))),
                 const SizedBox(width: 10),
                 Expanded(
                     child: TextField(
                         controller: _weight,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                            labelText: '体重 kg',
-                            border: OutlineInputBorder()))),
+                            labelText: '体重 kg', border: OutlineInputBorder()))),
               ]),
               const SizedBox(height: 16),
               Text('日常活动量', style: theme.textTheme.bodySmall),
@@ -748,17 +842,15 @@ class _FatLossProfileDialogState extends State<_FatLossProfileDialog> {
                       dense: true,
                       value: value,
                       groupValue: _deficit,
-                      onChanged: (v) =>
-                          setState(() => _deficit = v ?? 500),
+                      onChanged: (v) => setState(() => _deficit = v ?? 500),
                       title: Text('$value 千卡/天'),
                       subtitle: Text(label),
                     ),
                 ],
               ),
-              Text('目标热量不会低于健康下限（女 1200 / 男 1500 千卡）。',
+              Text('日常活动不重复包含记录的训练。热量为估计值；未满 18 岁不使用此成人公式。',
                   style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                      fontSize: 11)),
+                      color: theme.colorScheme.onSurfaceVariant, fontSize: 11)),
             ],
           ),
         ),

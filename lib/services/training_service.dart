@@ -7,6 +7,8 @@ import '../models/training.dart';
 import 'isar_service.dart';
 import 'reminder_calc.dart';
 import 'reminder_service.dart';
+import 'energy_service.dart';
+import 'fat_loss_service.dart';
 
 class TrainingCycleDay {
   final String name;
@@ -222,6 +224,20 @@ class TrainingService {
     required WorkoutLog log,
     required List<WorkoutSet> sets,
   }) async {
+    if (log.completed && log.estimatedCalories == null) {
+      final profile = await FatLossService.instance.loadProfile();
+      if (profile != null) {
+        final elapsed = log.endedAt?.difference(log.startedAt).inSeconds;
+        final estimate = EnergyService.estimateTraining(
+            weightKg: profile.weightKg,
+            sets: sets,
+            durationMinutes: log.estimatedMinutes ??
+                (elapsed != null && elapsed > 0 ? elapsed / 60 : null));
+        log.estimatedCalories = estimate?.calories;
+        log.calorieWeightKg = estimate == null ? null : profile.weightKg;
+        log.estimatedMinutes = estimate?.minutes;
+      }
+    }
     final isar = IsarService.instance.isar;
     final workoutId = await isar.writeTxn(() async {
       final id = await isar.workoutLogs.put(log);
@@ -240,6 +256,20 @@ class TrainingService {
       await isar.workoutLogs.delete(workoutId);
       await isar.workoutSets.filter().workoutIdEqualTo(workoutId).deleteAll();
     });
+  }
+
+  Stream<void> watchWorkoutChanges() =>
+      IsarService.instance.isar.workoutLogs.watchLazy();
+
+  Future<List<WorkoutLog>> getCompletedForDate(DateTime date) {
+    final start = DateTime(date.year, date.month, date.day);
+    return IsarService.instance.isar.workoutLogs
+        .filter()
+        .completedEqualTo(true)
+        .and()
+        .dateBetween(start, start.add(const Duration(days: 1)),
+            includeUpper: false)
+        .findAll();
   }
 
   /// 训练历史（按日期倒序）

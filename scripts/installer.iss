@@ -4,7 +4,7 @@
 
 #define MyAppName "拾序"
 #define MyAppNameEn "TodoApp"
-#define MyAppVersion "1.0.10"
+#define MyAppVersion "1.0.11"
 #define MyAppPublisher "RJL816"
 #define MyAppExeName "todo_app.exe"
 #define MyAppURL "https://github.com/RJL816/TODOAPP"

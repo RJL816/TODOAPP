@@ -47,7 +47,8 @@ class _TrainingCycleDialogState extends State<TrainingCycleDialog> {
         final exercises =
             await TrainingService.instance.getExercisesForPlan(plan.id);
         for (final exercise in exercises) {
-          day.actions.add(_ActionDraft(exercise.name, exercise.plannedSets));
+          day.actions.add(_ActionDraft(exercise.name, exercise.plannedSets,
+              exercise.plannedReps, exercise.plannedWeightGrams));
         }
       }
       _days.add(day);
@@ -86,6 +87,22 @@ class _TrainingCycleDialogState extends State<TrainingCycleDialog> {
         );
         return;
       }
+      for (final action in day.actions
+          .where((a) => !day.rest && a.name.text.trim().isNotEmpty)) {
+        final reps = int.tryParse(action.reps.text.trim());
+        final weight = double.tryParse(action.weight.text.trim());
+        if ((action.reps.text.trim().isNotEmpty &&
+                (reps == null || reps <= 0 || reps > 1000)) ||
+            (action.weight.text.trim().isNotEmpty &&
+                (weight == null ||
+                    !weight.isFinite ||
+                    weight < 0 ||
+                    weight > 1000))) {
+          ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('动作次数需为 1–1000 的整数，重量为 0–1000kg')));
+          return;
+        }
+      }
       days.add(TrainingCycleDay(
         name: day.rest ? '休息日' : day.title.text.trim(),
         isRestDay: day.rest,
@@ -97,12 +114,64 @@ class _TrainingCycleDialogState extends State<TrainingCycleDialog> {
                     PlanExercise.create(
                         planId: 0,
                         name: action.name.text.trim(),
-                        plannedSets: action.sets),
+                        plannedSets: action.sets,
+                        plannedReps: int.tryParse(action.reps.text.trim()),
+                        plannedWeightGrams:
+                            double.tryParse(action.weight.text.trim()) == null
+                                ? null
+                                : (double.parse(action.weight.text.trim()) *
+                                        1000)
+                                    .round()),
               ],
       ));
     }
     Navigator.pop(
         context, (name: _name.text.trim(), startDate: _start, days: days));
+  }
+
+  Widget _actionEditor(_DayDraft day, int index) {
+    final action = day.actions[index];
+    return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Column(children: [
+          Row(children: [
+            Expanded(
+                child: TextField(
+                    controller: action.name,
+                    decoration: const InputDecoration(
+                        hintText: '动作名称', isDense: true))),
+            const SizedBox(width: 8),
+            DropdownButton<int>(
+                value: action.sets,
+                items: [
+                  for (var n = 1; n <= 12; n++)
+                    DropdownMenuItem(value: n, child: Text('$n 组'))
+                ],
+                onChanged: (value) => setState(() => action.sets = value ?? 3)),
+            IconButton(
+                tooltip: '删除动作',
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: () =>
+                    setState(() => day.actions.removeAt(index).dispose())),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(
+                child: TextField(
+                    controller: action.reps,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                        labelText: '每组次数（可选）', isDense: true))),
+            const SizedBox(width: 12),
+            Expanded(
+                child: TextField(
+                    controller: action.weight,
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    decoration: const InputDecoration(
+                        labelText: '重量 kg（可选）', isDense: true))),
+          ]),
+        ]));
   }
 
   @override
@@ -195,39 +264,7 @@ class _TrainingCycleDialogState extends State<TrainingCycleDialog> {
                                 for (var actionIndex = 0;
                                     actionIndex < day.actions.length;
                                     actionIndex++)
-                                  Padding(
-                                      padding: const EdgeInsets.only(bottom: 8),
-                                      child: Row(children: [
-                                        Expanded(
-                                            child: TextField(
-                                                controller: day
-                                                    .actions[actionIndex].name,
-                                                decoration:
-                                                    const InputDecoration(
-                                                        hintText: '动作名称',
-                                                        isDense: true))),
-                                        const SizedBox(width: 8),
-                                        DropdownButton<int>(
-                                            value:
-                                                day.actions[actionIndex].sets,
-                                            items: [
-                                              for (var n = 1; n <= 12; n++)
-                                                DropdownMenuItem(
-                                                    value: n,
-                                                    child: Text('$n 组'))
-                                            ],
-                                            onChanged: (value) => setState(() =>
-                                                day.actions[actionIndex].sets =
-                                                    value ?? 3)),
-                                        IconButton(
-                                            tooltip: '删除动作',
-                                            icon: const Icon(Icons.close,
-                                                size: 18),
-                                            onPressed: () => setState(() => day
-                                                .actions
-                                                .removeAt(actionIndex)
-                                                .dispose())),
-                                      ])),
+                                  _actionEditor(day, actionIndex),
                                 TextButton.icon(
                                     onPressed: () => setState(
                                         () => day.actions.add(_ActionDraft())),
@@ -268,9 +305,16 @@ class _DayDraft {
 }
 
 class _ActionDraft {
-  final TextEditingController name;
+  final TextEditingController name, reps, weight;
   int sets;
-  _ActionDraft([String value = '', this.sets = 3])
-      : name = TextEditingController(text: value);
-  void dispose() => name.dispose();
+  _ActionDraft([String value = '', this.sets = 3, int? count, int? grams])
+      : name = TextEditingController(text: value),
+        reps = TextEditingController(text: count?.toString() ?? ''),
+        weight =
+            TextEditingController(text: grams == null ? '' : '${grams / 1000}');
+  void dispose() {
+    name.dispose();
+    reps.dispose();
+    weight.dispose();
+  }
 }

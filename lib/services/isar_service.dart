@@ -290,15 +290,29 @@ class IsarService {
         ..sortOrder = task.sortOrder; // 复制排序
     }).toList();
 
-    // 获取指定日期的一次性任务（包括已完成和未完成的）
-    final oneTimeTasks = await isar.todoItems
+    // DDL 从创建日起持续显示至完成；逾期但未完成仍保留，普通一次性任务维持原口径。
+    final candidates = await isar.todoItems
         .filter()
         .taskTypeEqualTo(TaskType.oneTime)
         .and()
-        .createdDateBetween(startOfDay, endOfDay,
-            includeLower: true, includeUpper: false)
+        .createdDateLessThan(endOfDay)
         .sortByCreatedAt()
         .findAll();
+    final oneTimeTasks = candidates.where((task) {
+      if (!task.createdDate.isBefore(startOfDay)) return true;
+      if (task.deadline == null) return false;
+      if (!task.isCompleted) return true;
+      final completed = task.completedAt;
+      // 历史日期保留当时尚未完成的 DDL，完成日之后收起。
+      return completed != null && !completed.isBefore(startOfDay);
+    }).map((task) {
+      if (task.deadline != null &&
+          task.completedAt != null &&
+          !task.completedAt!.isBefore(endOfDay)) {
+        return TodoItem.fromJson(task.toJson())..isCompleted = false;
+      }
+      return task;
+    }).toList();
 
     // 合并并按创建时间排序
     final allTasks = [...processedRecurring, ...oneTimeTasks];
@@ -408,8 +422,8 @@ class IsarService {
         .findAll();
     final counts = <DateTime, int>{};
     for (final completion in completions) {
-      final day = DateTime(completion.date.year, completion.date.month,
-          completion.date.day);
+      final day = DateTime(
+          completion.date.year, completion.date.month, completion.date.day);
       counts[day] = (counts[day] ?? 0) + 1;
     }
     return counts;

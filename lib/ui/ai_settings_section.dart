@@ -260,6 +260,14 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
           ),
         ]),
         const SizedBox(height: 12),
+        TextFormField(
+          initialValue: config.visionModel,
+          decoration: const InputDecoration(
+              labelText: '图片识别模型（可选）', helperText: '照片估算使用；留空沿用聊天模型，需支持图片输入'),
+          onChanged: (v) =>
+              _updateAiConfig(_draft().copyWith(visionModel: v.trim())),
+        ),
+        const SizedBox(height: 12),
         Text('允许 AI 读取的数据（用于生成建议）', style: theme.textTheme.bodySmall),
         const SizedBox(height: 4),
         Wrap(spacing: 6, runSpacing: 4, children: [
@@ -269,7 +277,8 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
             ('scopeFocus', '专注'),
             ('scopeTraining', '训练'),
             ('scopeDiet', '饮食'),
-            ('scopeFatLoss', '减脂目标'),
+            ('scopeFatLoss', '身体与目标'),
+            ('scopeMemos', '备忘录内容'),
           ])
             FilterChip(
               label: Text(label),
@@ -279,6 +288,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
                 'scopeFocus' => config.scopeFocus,
                 'scopeTraining' => config.scopeTraining,
                 'scopeDiet' => config.scopeDiet,
+                'scopeMemos' => config.scopeMemos,
                 _ => config.scopeFatLoss,
               },
               onSelected: _testing
@@ -289,6 +299,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
                         'scopeFocus' => _draft().copyWith(scopeFocus: v),
                         'scopeTraining' => _draft().copyWith(scopeTraining: v),
                         'scopeDiet' => _draft().copyWith(scopeDiet: v),
+                        'scopeMemos' => _draft().copyWith(scopeMemos: v),
                         _ => _draft().copyWith(scopeFatLoss: v),
                       }),
               visualDensity: VisualDensity.compact,
@@ -317,7 +328,7 @@ class _AiSettingsSectionState extends State<AiSettingsSection> {
         Text('API 地址、Key 与模型需属于同一平台；第三方平台请使用其提供的地址和模型名。',
             style: theme.textTheme.bodySmall),
         Text(
-            '发送内容为按上面勾选范围构建的今日数据摘要；'
+            '发送内容为勾选范围的数据摘要；备忘录授权包含正文片段，默认关闭。照片仅在确认发送后上传；'
             'Key 仅保存在本机。悬浮球会在配置完成后出现。',
             style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant, fontSize: 11)),

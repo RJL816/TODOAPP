@@ -82,7 +82,7 @@ class FatLossService {
         genderOffset;
     final tdee = bmr * profile.activityFactor;
     final floor = profile.gender == 'f' ? 1200.0 : 1500.0;
-    final target = (tdee - profile.deficit).clamp(floor, tdee);
+    final target = (tdee - profile.deficit).clamp(floor, tdee < floor ? floor : tdee);
     final proteinG = (1.8 * profile.weightKg).round();
     final fatG = (target * 0.25 / 9).round();
     final carbG =

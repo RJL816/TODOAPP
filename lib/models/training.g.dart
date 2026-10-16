@@ -1867,9 +1867,19 @@ const PlanExerciseSchema = CollectionSchema(
       name: r'planId',
       type: IsarType.long,
     ),
-    r'plannedSets': PropertySchema(
+    r'plannedReps': PropertySchema(
       id: 3,
+      name: r'plannedReps',
+      type: IsarType.long,
+    ),
+    r'plannedSets': PropertySchema(
+      id: 4,
       name: r'plannedSets',
+      type: IsarType.long,
+    ),
+    r'plannedWeightGrams': PropertySchema(
+      id: 5,
+      name: r'plannedWeightGrams',
       type: IsarType.long,
     )
   },
@@ -1926,7 +1936,9 @@ void _planExerciseSerialize(
   writer.writeString(offsets[0], object.name);
   writer.writeString(offsets[1], object.notes);
   writer.writeLong(offsets[2], object.planId);
-  writer.writeLong(offsets[3], object.plannedSets);
+  writer.writeLong(offsets[3], object.plannedReps);
+  writer.writeLong(offsets[4], object.plannedSets);
+  writer.writeLong(offsets[5], object.plannedWeightGrams);
 }
 
 PlanExercise _planExerciseDeserialize(
@@ -1940,7 +1952,9 @@ PlanExercise _planExerciseDeserialize(
   object.name = reader.readString(offsets[0]);
   object.notes = reader.readStringOrNull(offsets[1]);
   object.planId = reader.readLong(offsets[2]);
-  object.plannedSets = reader.readLong(offsets[3]);
+  object.plannedReps = reader.readLongOrNull(offsets[3]);
+  object.plannedSets = reader.readLong(offsets[4]);
+  object.plannedWeightGrams = reader.readLongOrNull(offsets[5]);
   return object;
 }
 
@@ -1958,7 +1972,11 @@ P _planExerciseDeserializeProp<P>(
     case 2:
       return (reader.readLong(offset)) as P;
     case 3:
+      return (reader.readLongOrNull(offset)) as P;
+    case 4:
       return (reader.readLong(offset)) as P;
+    case 5:
+      return (reader.readLongOrNull(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
   }
@@ -2551,6 +2569,80 @@ extension PlanExerciseQueryFilter
   }
 
   QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedRepsIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'plannedReps',
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedRepsIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'plannedReps',
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedRepsEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'plannedReps',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedRepsGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'plannedReps',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedRepsLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'plannedReps',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedRepsBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'plannedReps',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
       plannedSetsEqualTo(int value) {
     return QueryBuilder.apply(this, (query) {
       return query.addFilterCondition(FilterCondition.equalTo(
@@ -2605,6 +2697,80 @@ extension PlanExerciseQueryFilter
       ));
     });
   }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedWeightGramsIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'plannedWeightGrams',
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedWeightGramsIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'plannedWeightGrams',
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedWeightGramsEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'plannedWeightGrams',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedWeightGramsGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'plannedWeightGrams',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedWeightGramsLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'plannedWeightGrams',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterFilterCondition>
+      plannedWeightGramsBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'plannedWeightGrams',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
 }
 
 extension PlanExerciseQueryObject
@@ -2651,6 +2817,19 @@ extension PlanExerciseQuerySortBy
     });
   }
 
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy> sortByPlannedReps() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedReps', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy>
+      sortByPlannedRepsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedReps', Sort.desc);
+    });
+  }
+
   QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy> sortByPlannedSets() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'plannedSets', Sort.asc);
@@ -2661,6 +2840,20 @@ extension PlanExerciseQuerySortBy
       sortByPlannedSetsDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'plannedSets', Sort.desc);
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy>
+      sortByPlannedWeightGrams() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeightGrams', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy>
+      sortByPlannedWeightGramsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeightGrams', Sort.desc);
     });
   }
 }
@@ -2715,6 +2908,19 @@ extension PlanExerciseQuerySortThenBy
     });
   }
 
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy> thenByPlannedReps() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedReps', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy>
+      thenByPlannedRepsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedReps', Sort.desc);
+    });
+  }
+
   QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy> thenByPlannedSets() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'plannedSets', Sort.asc);
@@ -2725,6 +2931,20 @@ extension PlanExerciseQuerySortThenBy
       thenByPlannedSetsDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'plannedSets', Sort.desc);
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy>
+      thenByPlannedWeightGrams() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeightGrams', Sort.asc);
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QAfterSortBy>
+      thenByPlannedWeightGramsDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'plannedWeightGrams', Sort.desc);
     });
   }
 }
@@ -2751,9 +2971,22 @@ extension PlanExerciseQueryWhereDistinct
     });
   }
 
+  QueryBuilder<PlanExercise, PlanExercise, QDistinct> distinctByPlannedReps() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'plannedReps');
+    });
+  }
+
   QueryBuilder<PlanExercise, PlanExercise, QDistinct> distinctByPlannedSets() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'plannedSets');
+    });
+  }
+
+  QueryBuilder<PlanExercise, PlanExercise, QDistinct>
+      distinctByPlannedWeightGrams() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'plannedWeightGrams');
     });
   }
 }
@@ -2784,9 +3017,22 @@ extension PlanExerciseQueryProperty
     });
   }
 
+  QueryBuilder<PlanExercise, int?, QQueryOperations> plannedRepsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'plannedReps');
+    });
+  }
+
   QueryBuilder<PlanExercise, int, QQueryOperations> plannedSetsProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'plannedSets');
+    });
+  }
+
+  QueryBuilder<PlanExercise, int?, QQueryOperations>
+      plannedWeightGramsProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'plannedWeightGrams');
     });
   }
 }
@@ -2802,33 +3048,48 @@ const WorkoutLogSchema = CollectionSchema(
   name: r'WorkoutLog',
   id: 602145262339504743,
   properties: {
-    r'completed': PropertySchema(
+    r'calorieWeightKg': PropertySchema(
       id: 0,
+      name: r'calorieWeightKg',
+      type: IsarType.double,
+    ),
+    r'completed': PropertySchema(
+      id: 1,
       name: r'completed',
       type: IsarType.bool,
     ),
     r'date': PropertySchema(
-      id: 1,
+      id: 2,
       name: r'date',
       type: IsarType.dateTime,
     ),
     r'endedAt': PropertySchema(
-      id: 2,
+      id: 3,
       name: r'endedAt',
       type: IsarType.dateTime,
     ),
+    r'estimatedCalories': PropertySchema(
+      id: 4,
+      name: r'estimatedCalories',
+      type: IsarType.long,
+    ),
+    r'estimatedMinutes': PropertySchema(
+      id: 5,
+      name: r'estimatedMinutes',
+      type: IsarType.double,
+    ),
     r'planId': PropertySchema(
-      id: 3,
+      id: 6,
       name: r'planId',
       type: IsarType.long,
     ),
     r'startedAt': PropertySchema(
-      id: 4,
+      id: 7,
       name: r'startedAt',
       type: IsarType.dateTime,
     ),
     r'title': PropertySchema(
-      id: 5,
+      id: 8,
       name: r'title',
       type: IsarType.string,
     )
@@ -2890,12 +3151,15 @@ void _workoutLogSerialize(
   List<int> offsets,
   Map<Type, List<int>> allOffsets,
 ) {
-  writer.writeBool(offsets[0], object.completed);
-  writer.writeDateTime(offsets[1], object.date);
-  writer.writeDateTime(offsets[2], object.endedAt);
-  writer.writeLong(offsets[3], object.planId);
-  writer.writeDateTime(offsets[4], object.startedAt);
-  writer.writeString(offsets[5], object.title);
+  writer.writeDouble(offsets[0], object.calorieWeightKg);
+  writer.writeBool(offsets[1], object.completed);
+  writer.writeDateTime(offsets[2], object.date);
+  writer.writeDateTime(offsets[3], object.endedAt);
+  writer.writeLong(offsets[4], object.estimatedCalories);
+  writer.writeDouble(offsets[5], object.estimatedMinutes);
+  writer.writeLong(offsets[6], object.planId);
+  writer.writeDateTime(offsets[7], object.startedAt);
+  writer.writeString(offsets[8], object.title);
 }
 
 WorkoutLog _workoutLogDeserialize(
@@ -2905,13 +3169,16 @@ WorkoutLog _workoutLogDeserialize(
   Map<Type, List<int>> allOffsets,
 ) {
   final object = WorkoutLog();
-  object.completed = reader.readBool(offsets[0]);
-  object.date = reader.readDateTime(offsets[1]);
-  object.endedAt = reader.readDateTimeOrNull(offsets[2]);
+  object.calorieWeightKg = reader.readDoubleOrNull(offsets[0]);
+  object.completed = reader.readBool(offsets[1]);
+  object.date = reader.readDateTime(offsets[2]);
+  object.endedAt = reader.readDateTimeOrNull(offsets[3]);
+  object.estimatedCalories = reader.readLongOrNull(offsets[4]);
+  object.estimatedMinutes = reader.readDoubleOrNull(offsets[5]);
   object.id = id;
-  object.planId = reader.readLongOrNull(offsets[3]);
-  object.startedAt = reader.readDateTime(offsets[4]);
-  object.title = reader.readString(offsets[5]);
+  object.planId = reader.readLongOrNull(offsets[6]);
+  object.startedAt = reader.readDateTime(offsets[7]);
+  object.title = reader.readString(offsets[8]);
   return object;
 }
 
@@ -2923,16 +3190,22 @@ P _workoutLogDeserializeProp<P>(
 ) {
   switch (propertyId) {
     case 0:
-      return (reader.readBool(offset)) as P;
+      return (reader.readDoubleOrNull(offset)) as P;
     case 1:
-      return (reader.readDateTime(offset)) as P;
+      return (reader.readBool(offset)) as P;
     case 2:
-      return (reader.readDateTimeOrNull(offset)) as P;
-    case 3:
-      return (reader.readLongOrNull(offset)) as P;
-    case 4:
       return (reader.readDateTime(offset)) as P;
+    case 3:
+      return (reader.readDateTimeOrNull(offset)) as P;
+    case 4:
+      return (reader.readLongOrNull(offset)) as P;
     case 5:
+      return (reader.readDoubleOrNull(offset)) as P;
+    case 6:
+      return (reader.readLongOrNull(offset)) as P;
+    case 7:
+      return (reader.readDateTime(offset)) as P;
+    case 8:
       return (reader.readString(offset)) as P;
     default:
       throw IsarError('Unknown property with id $propertyId');
@@ -3246,6 +3519,90 @@ extension WorkoutLogQueryWhere
 
 extension WorkoutLogQueryFilter
     on QueryBuilder<WorkoutLog, WorkoutLog, QFilterCondition> {
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      calorieWeightKgIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'calorieWeightKg',
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      calorieWeightKgIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'calorieWeightKg',
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      calorieWeightKgEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'calorieWeightKg',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      calorieWeightKgGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'calorieWeightKg',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      calorieWeightKgLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'calorieWeightKg',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      calorieWeightKgBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'calorieWeightKg',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
   QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition> completedEqualTo(
       bool value) {
     return QueryBuilder.apply(this, (query) {
@@ -3376,6 +3733,164 @@ extension WorkoutLogQueryFilter
         includeLower: includeLower,
         upper: upper,
         includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedCaloriesIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'estimatedCalories',
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedCaloriesIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'estimatedCalories',
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedCaloriesEqualTo(int? value) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'estimatedCalories',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedCaloriesGreaterThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'estimatedCalories',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedCaloriesLessThan(
+    int? value, {
+    bool include = false,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'estimatedCalories',
+        value: value,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedCaloriesBetween(
+    int? lower,
+    int? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'estimatedCalories',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedMinutesIsNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNull(
+        property: r'estimatedMinutes',
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedMinutesIsNotNull() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(const FilterCondition.isNotNull(
+        property: r'estimatedMinutes',
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedMinutesEqualTo(
+    double? value, {
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.equalTo(
+        property: r'estimatedMinutes',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedMinutesGreaterThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.greaterThan(
+        include: include,
+        property: r'estimatedMinutes',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedMinutesLessThan(
+    double? value, {
+    bool include = false,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.lessThan(
+        include: include,
+        property: r'estimatedMinutes',
+        value: value,
+        epsilon: epsilon,
+      ));
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterFilterCondition>
+      estimatedMinutesBetween(
+    double? lower,
+    double? upper, {
+    bool includeLower = true,
+    bool includeUpper = true,
+    double epsilon = Query.epsilon,
+  }) {
+    return QueryBuilder.apply(this, (query) {
+      return query.addFilterCondition(FilterCondition.between(
+        property: r'estimatedMinutes',
+        lower: lower,
+        includeLower: includeLower,
+        upper: upper,
+        includeUpper: includeUpper,
+        epsilon: epsilon,
       ));
     });
   }
@@ -3697,6 +4212,19 @@ extension WorkoutLogQueryLinks
 
 extension WorkoutLogQuerySortBy
     on QueryBuilder<WorkoutLog, WorkoutLog, QSortBy> {
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> sortByCalorieWeightKg() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'calorieWeightKg', Sort.asc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy>
+      sortByCalorieWeightKgDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'calorieWeightKg', Sort.desc);
+    });
+  }
+
   QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> sortByCompleted() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'completed', Sort.asc);
@@ -3730,6 +4258,32 @@ extension WorkoutLogQuerySortBy
   QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> sortByEndedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'endedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> sortByEstimatedCalories() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedCalories', Sort.asc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy>
+      sortByEstimatedCaloriesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedCalories', Sort.desc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> sortByEstimatedMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy>
+      sortByEstimatedMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedMinutes', Sort.desc);
     });
   }
 
@@ -3772,6 +4326,19 @@ extension WorkoutLogQuerySortBy
 
 extension WorkoutLogQuerySortThenBy
     on QueryBuilder<WorkoutLog, WorkoutLog, QSortThenBy> {
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> thenByCalorieWeightKg() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'calorieWeightKg', Sort.asc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy>
+      thenByCalorieWeightKgDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'calorieWeightKg', Sort.desc);
+    });
+  }
+
   QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> thenByCompleted() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'completed', Sort.asc);
@@ -3805,6 +4372,32 @@ extension WorkoutLogQuerySortThenBy
   QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> thenByEndedAtDesc() {
     return QueryBuilder.apply(this, (query) {
       return query.addSortBy(r'endedAt', Sort.desc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> thenByEstimatedCalories() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedCalories', Sort.asc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy>
+      thenByEstimatedCaloriesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedCalories', Sort.desc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy> thenByEstimatedMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedMinutes', Sort.asc);
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QAfterSortBy>
+      thenByEstimatedMinutesDesc() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addSortBy(r'estimatedMinutes', Sort.desc);
     });
   }
 
@@ -3859,6 +4452,12 @@ extension WorkoutLogQuerySortThenBy
 
 extension WorkoutLogQueryWhereDistinct
     on QueryBuilder<WorkoutLog, WorkoutLog, QDistinct> {
+  QueryBuilder<WorkoutLog, WorkoutLog, QDistinct> distinctByCalorieWeightKg() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'calorieWeightKg');
+    });
+  }
+
   QueryBuilder<WorkoutLog, WorkoutLog, QDistinct> distinctByCompleted() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'completed');
@@ -3874,6 +4473,19 @@ extension WorkoutLogQueryWhereDistinct
   QueryBuilder<WorkoutLog, WorkoutLog, QDistinct> distinctByEndedAt() {
     return QueryBuilder.apply(this, (query) {
       return query.addDistinctBy(r'endedAt');
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QDistinct>
+      distinctByEstimatedCalories() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'estimatedCalories');
+    });
+  }
+
+  QueryBuilder<WorkoutLog, WorkoutLog, QDistinct> distinctByEstimatedMinutes() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addDistinctBy(r'estimatedMinutes');
     });
   }
 
@@ -3905,6 +4517,13 @@ extension WorkoutLogQueryProperty
     });
   }
 
+  QueryBuilder<WorkoutLog, double?, QQueryOperations>
+      calorieWeightKgProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'calorieWeightKg');
+    });
+  }
+
   QueryBuilder<WorkoutLog, bool, QQueryOperations> completedProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'completed');
@@ -3920,6 +4539,19 @@ extension WorkoutLogQueryProperty
   QueryBuilder<WorkoutLog, DateTime?, QQueryOperations> endedAtProperty() {
     return QueryBuilder.apply(this, (query) {
       return query.addPropertyName(r'endedAt');
+    });
+  }
+
+  QueryBuilder<WorkoutLog, int?, QQueryOperations> estimatedCaloriesProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'estimatedCalories');
+    });
+  }
+
+  QueryBuilder<WorkoutLog, double?, QQueryOperations>
+      estimatedMinutesProperty() {
+    return QueryBuilder.apply(this, (query) {
+      return query.addPropertyName(r'estimatedMinutes');
     });
   }
 

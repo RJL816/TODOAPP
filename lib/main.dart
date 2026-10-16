@@ -354,8 +354,8 @@ class _TodoHomePageState extends State<TodoHomePage>
       final info = await PackageInfo.fromPlatform();
       final release = await UpdateService.instance.fetchLatestRelease();
       if (release == null || !mounted) return;
-      final dismissed =
-          (await SharedPreferences.getInstance()).getString('update_dismissed_version');
+      final dismissed = (await SharedPreferences.getInstance())
+          .getString('update_dismissed_version');
       if (UpdateService.isNewerVersion(release.version, info.version) &&
           dismissed != release.version) {
         await (await SharedPreferences.getInstance())
@@ -365,9 +365,9 @@ class _TodoHomePageState extends State<TodoHomePage>
           duration: const Duration(seconds: 8),
           content: Text('发现新版本 v${release.version}，可下载更新'),
           action: SnackBarAction(
-              label: Platform.isWindows ? '一键更新' : '下载更新',
-              onPressed: () => runInAppUpdate(context, release),
-            ),
+            label: Platform.isWindows ? '一键更新' : '下载更新',
+            onPressed: () => runInAppUpdate(context, release),
+          ),
         ));
       }
     } catch (_) {
@@ -415,7 +415,8 @@ class _TodoHomePageState extends State<TodoHomePage>
     _loadAutoStartState();
     _loadCategoryFilter();
     _loadAmbientBackground();
-    _updateCheckTimer = Timer(const Duration(seconds: 8), _silentCheckForUpdate);
+    _updateCheckTimer =
+        Timer(const Duration(seconds: 8), _silentCheckForUpdate);
     // 窗口置顶状态恢复（Windows）
     if (Platform.isWindows) {
       SharedPreferences.getInstance()
@@ -430,7 +431,8 @@ class _TodoHomePageState extends State<TodoHomePage>
     _loadWeatherBackground();
     _ambientClockTimer = Timer.periodic(const Duration(minutes: 1), (_) async {
       if (!mounted) return;
-      if (_showAmbientBackground && WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
+      if (_showAmbientBackground &&
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed) {
         unawaited(_weather.refresh());
       }
       if (!_ambientSceneAuto) return;
@@ -542,7 +544,8 @@ class _TodoHomePageState extends State<TodoHomePage>
     if (index < 0 || index >= AmbientBackdrop.sceneAssets.length) return;
     try {
       await precacheImage(
-          AssetImage(AmbientBackdrop.sceneAsset(index, _weather.mood)), context);
+          AssetImage(AmbientBackdrop.sceneAsset(index, _weather.mood)),
+          context);
     } catch (_) {
       // A failed prefetch should not prevent selecting the background.
     }
@@ -1120,90 +1123,90 @@ class _TodoHomePageState extends State<TodoHomePage>
                             if (wide && !immersiveFocus)
                               _buildDesktopNav(theme),
                             Expanded(
-                                child: IndexedStack(
-                              index: _currentIndex,
-                              children: [
-                                PageFrame(child: _buildTodoListPage(theme)),
-                                PageFrame(
-                                  maxWidth: 1440,
-                                  ambient: ambient,
-                                  child: PlanPage(
-                                    key: ValueKey(_planVersion),
-                                    darkBackground: ambient,
-                                  ),
-                                ),
-                                PageFrame(
+                              child: IndexedStack(
+                                index: _currentIndex,
+                                children: [
+                                  PageFrame(child: _buildTodoListPage(theme)),
+                                  PageFrame(
+                                    maxWidth: 1440,
                                     ambient: ambient,
-                                    child: StatisticsPage(
-                                      key: ValueKey(_statisticsVersion),
+                                    child: PlanPage(
+                                      key: ValueKey(_planVersion),
                                       darkBackground: ambient,
-                                      onOpenToday: () => _navigateTo(0),
-                                    )),
-                                PageFrame(
-                                  maxWidth: 1080,
-                                  ambient: ambient,
-                                  child: RecordHubPage(
-                                    darkBackground: ambient,
-                                    onOpenMemo: () => _navigateTo(4),
-                                    onOpenFitness: () => _navigateTo(6),
-                                    onOpenDiet: () => _navigateTo(7),
-                                    onOpenExpense: () => _navigateTo(8),
-                                    onOpenSummary: () => _navigateTo(9),
+                                    ),
                                   ),
-                                ),
-                                PageFrame(
-                                    maxWidth:
-                                        double.infinity, // 备忘录满宽：左侧贴导航、右侧直达窗口边界
+                                  PageFrame(
+                                      ambient: ambient,
+                                      child: StatisticsPage(
+                                        key: ValueKey(_statisticsVersion),
+                                        darkBackground: ambient,
+                                        onOpenToday: () => _navigateTo(0),
+                                      )),
+                                  PageFrame(
+                                    maxWidth: 1080,
                                     ambient: ambient,
-                                    child: AmbientReadingTheme(
-                                      enabled: ambient,
-                                      child: const MemoPage(),
-                                    )),
-                                PomodoroPage(
-                                  onOpenAppSettings: _showSettingsDialog,
-                                  onExit: () => _navigateTo(0),
-                                  onOpenTodo: () => _navigateTo(0),
-                                  focusImmersive: _focusImmersive,
-                                  onFocusImmersiveChanged: _setFocusImmersive,
-                                  inheritBackdrop: _showAmbientBackground,
-                                ),
-                                PageFrame(
-                                    maxWidth: 860,
-                                    ambient: ambient,
-                                    child: AmbientReadingTheme(
-                                      enabled: ambient,
-                                      child: const FitnessPage(),
-                                    )),
-                                PageFrame(
-                                    ambient: ambient,
-                                    child: AmbientReadingTheme(
-                                      enabled: ambient,
-                                      child: const DietPage(),
-                                    )),
-                                PageFrame(
-                                    ambient: ambient,
-                                    child: AmbientReadingTheme(
-                                      enabled: ambient,
-                                      child: const ExpensePage(),
-                                    )),
-                                PageFrame(
-                                  maxWidth: 1080,
-                                  ambient: ambient,
-                                  child: MorePage(
-                                    key: ValueKey(_moreVersion),
-                                    onOpenMemo: () => _navigateTo(4),
-                                    onOpenPomodoro: () => _navigateTo(5),
-                                    onOpenFitness: () => _navigateTo(6),
-                                    onOpenDiet: () => _navigateTo(7),
-                                    onOpenExpense: () => _navigateTo(8),
-                                    darkBackground: ambient,
-                                    summaryOnly: true,
+                                    child: RecordHubPage(
+                                      darkBackground: ambient,
+                                      onOpenMemo: () => _navigateTo(4),
+                                      onOpenFitness: () => _navigateTo(6),
+                                      onOpenDiet: () => _navigateTo(7),
+                                      onOpenExpense: () => _navigateTo(8),
+                                      onOpenSummary: () => _navigateTo(9),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                  PageFrame(
+                                      maxWidth: double
+                                          .infinity, // 备忘录满宽：左侧贴导航、右侧直达窗口边界
+                                      ambient: ambient,
+                                      child: AmbientReadingTheme(
+                                        enabled: ambient,
+                                        child: const MemoPage(),
+                                      )),
+                                  PomodoroPage(
+                                    onOpenAppSettings: _showSettingsDialog,
+                                    onExit: () => _navigateTo(0),
+                                    onOpenTodo: () => _navigateTo(0),
+                                    focusImmersive: _focusImmersive,
+                                    onFocusImmersiveChanged: _setFocusImmersive,
+                                    inheritBackdrop: _showAmbientBackground,
+                                  ),
+                                  PageFrame(
+                                      maxWidth: 860,
+                                      ambient: ambient,
+                                      child: AmbientReadingTheme(
+                                        enabled: ambient,
+                                        child: const FitnessPage(),
+                                      )),
+                                  PageFrame(
+                                      ambient: ambient,
+                                      child: AmbientReadingTheme(
+                                        enabled: ambient,
+                                        child: const DietPage(),
+                                      )),
+                                  PageFrame(
+                                      ambient: ambient,
+                                      child: AmbientReadingTheme(
+                                        enabled: ambient,
+                                        child: const ExpensePage(),
+                                      )),
+                                  PageFrame(
+                                    maxWidth: 1080,
+                                    ambient: ambient,
+                                    child: MorePage(
+                                      key: ValueKey(_moreVersion),
+                                      onOpenMemo: () => _navigateTo(4),
+                                      onOpenPomodoro: () => _navigateTo(5),
+                                      onOpenFitness: () => _navigateTo(6),
+                                      onOpenDiet: () => _navigateTo(7),
+                                      onOpenExpense: () => _navigateTo(8),
+                                      darkBackground: ambient,
+                                      summaryOnly: true,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ]),
+                          ]),
                         ),
                       ],
                     ),
@@ -1707,12 +1710,10 @@ class _TodoHomePageState extends State<TodoHomePage>
     );
   }
 
-  /// 待处理任务：未完成且未过期（一次性任务过截止时刻自动消失），
+  /// 待处理任务：全部未完成任务，逾期 DDL 继续保留，
   /// 按截止时间升序、同序按添加先后。首页待处理卡与"接下来做"共用。
   List<TodoItem> _activeTodos() {
-    final todos = _filteredTodos
-        .where((todo) => !todo.isCompleted && !todo.isExpired())
-        .toList()
+    final todos = _filteredTodos.where((todo) => !todo.isCompleted).toList()
       ..sort((a, b) {
         final aDate = a.deadline ?? DateTime(9999);
         final bDate = b.deadline ?? DateTime(9999);
@@ -1729,10 +1730,8 @@ class _TodoHomePageState extends State<TodoHomePage>
     final palette = _ambientPalette;
     final active = _activeTodos();
     final completed = _filteredTodos.where((todo) => todo.isCompleted).toList();
-    // 已过期未完成：不进待处理，但收进"已过期"分组保持可达（可编辑改期）
-    final expired = _filteredTodos
-        .where((todo) => !todo.isCompleted && todo.isExpired())
-        .toList();
+    // 逾期 DDL 继续留在待处理，直到用户手动完成或删除。
+    const expired = <TodoItem>[];
 
     // Android's stretch indicator filters the whole viewport into a separate
     // layer, preventing glass panels from sampling the scene behind the list.
@@ -1753,8 +1752,7 @@ class _TodoHomePageState extends State<TodoHomePage>
 
   ScrollPhysics _todayScrollPhysics(ThemeData theme) =>
       theme.platform == TargetPlatform.android
-          ? const BouncingScrollPhysics(
-              parent: AlwaysScrollableScrollPhysics())
+          ? const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics())
           : const AlwaysScrollableScrollPhysics();
 
   /// 窄内容（小窗/手机/历史日期）：保持原单列流。
@@ -1984,8 +1982,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                     )),
                 Icon(Icons.chevron_right,
                     size: 15,
-                    color:
-                        ambient ? palette.secondaryText : AppColors.muted),
+                    color: ambient ? palette.secondaryText : AppColors.muted),
               ]),
             ),
           ]),
@@ -2004,9 +2001,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                             ? (ambient
                                 ? palette.secondaryText.withValues(alpha: .55)
                                 : AppColors.muted.withValues(alpha: .75))
-                            : (ambient
-                                ? palette.primaryText
-                                : AppColors.ink),
+                            : (ambient ? palette.primaryText : AppColors.ink),
                       )),
                 ),
                 Container(
@@ -2027,8 +2022,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                                         .withValues(alpha: .40)
                                     : AppColors.muted.withValues(alpha: .55))
                                 : (ambient
-                                    ? palette.primaryText
-                                        .withValues(alpha: .75)
+                                    ? palette.primaryText.withValues(alpha: .75)
                                     : AppColors.ink.withValues(alpha: .70))),
                   ),
                 ),
@@ -2050,9 +2044,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                           ? (ambient
                               ? palette.secondaryText.withValues(alpha: .60)
                               : AppColors.muted)
-                          : (ambient
-                              ? palette.primaryText
-                              : AppColors.ink),
+                          : (ambient ? palette.primaryText : AppColors.ink),
                     ),
                   ),
                 ),
@@ -2065,8 +2057,7 @@ class _TodoHomePageState extends State<TodoHomePage>
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: ambient
                               ? palette.secondaryText.withValues(
-                                  alpha: slots[i].state ==
-                                          _CourseSlotState.past
+                                  alpha: slots[i].state == _CourseSlotState.past
                                       ? .50
                                       : .85)
                               : AppColors.muted,
@@ -2448,74 +2439,79 @@ class _TodoHomePageState extends State<TodoHomePage>
                     sigmaX: 10 * GlassTuning.blurScale(_glassClarity),
                     sigmaY: 10 * GlassTuning.blurScale(_glassClarity),
                   ),
-                child: Container(
-                  height: 52,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(18),
-                    gradient: onDark
-                        ? LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              palette.tint.withValues(
-                                  alpha: (palette.tintOpacity *
-                                          1.15 *
-                                          GlassTuning.tintScale(_glassClarity))
-                                      .clamp(.16, .68)),
-                              palette.tint.withValues(
-                                  alpha: (palette.tintOpacity *
-                                          GlassTuning.tintScale(_glassClarity))
-                                      .clamp(.12, .60)),
-                            ],
-                          )
-                        : LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.white.withValues(alpha: .72),
-                              Colors.white.withValues(alpha: .56),
-                            ],
-                          ),
-                    border: Border.all(
-                      color: onDark
-                          ? palette.edge
-                          : Colors.white.withValues(alpha: .80),
-                    ),
-                  ),
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _quickInputFocus,
-                    onSubmitted: _addTodo,
-                    textInputAction: TextInputAction.done,
-                    cursorColor: onDark ? palette.primaryText : AppColors.navy,
-                    cursorWidth: 2.8,
-                    cursorRadius: const Radius.circular(1.4),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: onDark ? palette.primaryText : AppColors.ink,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    decoration: InputDecoration(
-                      filled: false,
-                      hintText: '写下下一件要做的事',
-                      hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                        color: onDark ? palette.secondaryText : AppColors.muted,
-                        fontWeight: FontWeight.w500,
+                  child: Container(
+                    height: 52,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: onDark
+                          ? LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                palette.tint.withValues(
+                                    alpha: (palette.tintOpacity *
+                                            1.15 *
+                                            GlassTuning.tintScale(
+                                                _glassClarity))
+                                        .clamp(.16, .68)),
+                                palette.tint.withValues(
+                                    alpha: (palette.tintOpacity *
+                                            GlassTuning.tintScale(
+                                                _glassClarity))
+                                        .clamp(.12, .60)),
+                              ],
+                            )
+                          : LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.white.withValues(alpha: .72),
+                                Colors.white.withValues(alpha: .56),
+                              ],
+                            ),
+                      border: Border.all(
+                        color: onDark
+                            ? palette.edge
+                            : Colors.white.withValues(alpha: .80),
                       ),
-                      prefixIcon: Icon(Icons.add,
-                          size: 21,
-                          color: onDark
-                              ? AppColors.warmCream.withValues(alpha: .90)
-                              : AppColors.navy),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                    ),
+                    child: TextField(
+                      controller: _controller,
+                      focusNode: _quickInputFocus,
+                      onSubmitted: _addTodo,
+                      textInputAction: TextInputAction.done,
+                      cursorColor:
+                          onDark ? palette.primaryText : AppColors.navy,
+                      cursorWidth: 2.8,
+                      cursorRadius: const Radius.circular(1.4),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: onDark ? palette.primaryText : AppColors.ink,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        filled: false,
+                        hintText: '写下下一件要做的事',
+                        hintStyle: theme.textTheme.bodyMedium?.copyWith(
+                          color:
+                              onDark ? palette.secondaryText : AppColors.muted,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        prefixIcon: Icon(Icons.add,
+                            size: 21,
+                            color: onDark
+                                ? AppColors.warmCream.withValues(alpha: .90)
+                                : AppColors.navy),
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 15),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
           ),
           const SizedBox(width: 11),
           _SoftActionButton(
@@ -3208,11 +3204,8 @@ class _TodoHomePageState extends State<TodoHomePage>
             : now.isAfter(endAt)
                 ? _CourseSlotState.past
                 : _CourseSlotState.now;
-        courseSlots.add(_CourseSlot(
-            '${startSlot.startLabel} - ${end.endLabel}',
-            course.name,
-            course.location,
-            state));
+        courseSlots.add(_CourseSlot('${startSlot.startLabel} - ${end.endLabel}',
+            course.name, course.location, state));
       }
 
       if (mounted) {
@@ -3629,7 +3622,7 @@ class _TodoListItem extends StatelessWidget {
     };
     // 列表项绘制隔离：滚动/勾选时只重绘该行
     return RepaintBoundary(
-      child: Column(children: [
+        child: Column(children: [
       Material(
         color: Colors.transparent,
         child: InkWell(
@@ -3725,7 +3718,7 @@ class _TodoListItem extends StatelessWidget {
                         const SizedBox(width: 12),
                         Flexible(
                           child: Text(
-                            '${deadline.month}月${deadline.day}日 ${deadline.hour.toString().padLeft(2, '0')}:${deadline.minute.toString().padLeft(2, '0')}',
+                            '${!todo.isCompleted && deadline.isBefore(now) ? '已逾期 · ' : ''}${deadline.month}月${deadline.day}日 ${deadline.hour.toString().padLeft(2, '0')}:${deadline.minute.toString().padLeft(2, '0')}',
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: theme.textTheme.bodySmall?.copyWith(
@@ -4069,31 +4062,31 @@ class _SettingsDialogState extends State<_SettingsDialog> {
               color: theme.colorScheme.primaryContainer.withValues(alpha: .45),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('发现新版本 v${_newRelease!.version}',
-                      style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600)),
-                  if (_newRelease!.notes.trim().isNotEmpty) ...[
-                    const SizedBox(height: 4),
-                    Text(_newRelease!.notes.trim(),
-                        maxLines: 4,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall),
-                  ],
-                  const SizedBox(height: 8),
-                  FilledButton.icon(
-                    onPressed: (Platform.isWindows &&
-                            _newRelease!.hasWindowsDownload)
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('发现新版本 v${_newRelease!.version}',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w600)),
+              if (_newRelease!.notes.trim().isNotEmpty) ...[
+                const SizedBox(height: 4),
+                Text(_newRelease!.notes.trim(),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall),
+              ],
+              const SizedBox(height: 8),
+              FilledButton.icon(
+                onPressed:
+                    (Platform.isWindows && _newRelease!.hasWindowsDownload)
                         ? () => runInAppUpdate(context, _newRelease!)
                         : _openDownload,
-                    icon: const Icon(Icons.download_rounded, size: 18),
-                    label: Text(Platform.isWindows &&
-                            _newRelease!.hasWindowsDownload
+                icon: const Icon(Icons.download_rounded, size: 18),
+                label: Text(
+                    Platform.isWindows && _newRelease!.hasWindowsDownload
                         ? '下载并安装'
                         : '前往下载'),
-                  ),
-                ]),
+              ),
+            ]),
           ),
         ] else if (_updateState == 'error') ...[
           Text('检查失败：$_updateError',
@@ -4112,8 +4105,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     ]);
   }
 
-  Widget _aiSection(ThemeData theme) => AiSettingsSection(
-      onConfigChanged: widget.onAiConfigChanged);
+  Widget _aiSection(ThemeData theme) =>
+      AiSettingsSection(onConfigChanged: widget.onAiConfigChanged);
 
   Widget _fontColorDot({
     required String label,
@@ -4235,9 +4228,8 @@ class _SettingsDialogState extends State<_SettingsDialog> {
     final previewColor = switch (_localFontMode) {
       'white' => Colors.white,
       'black' => const Color(0xFF172A3A),
-      'custom' => _localFontValue == null
-          ? Colors.white
-          : Color(_localFontValue!),
+      'custom' =>
+        _localFontValue == null ? Colors.white : Color(_localFontValue!),
       _ => const Color(0xFFF5F7F6),
     };
 
