@@ -16,7 +16,8 @@ bool RefreshNotificationIdentity(const std::string& icon_path) {
       icon.data(), count);
   icon.resize(count - 1);
   if (GetFileAttributesW(icon.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
-  constexpr wchar_t identity[] = L"拾序 · Dayloom";
+  constexpr wchar_t identity[] = L"Dayloom";
+  constexpr wchar_t display_name[] = L"拾序 · Dayloom";
   wchar_t exe[MAX_PATH];
   const DWORD length = GetModuleFileNameW(nullptr, exe, MAX_PATH);
   if (length == 0 || length >= MAX_PATH) return false;
@@ -31,7 +32,7 @@ bool RefreshNotificationIdentity(const std::string& icon_path) {
   link->SetArguments(L"");
   const std::wstring folder = std::wstring(exe).substr(0, std::wstring(exe).find_last_of(L"\\"));
   link->SetWorkingDirectory(folder.c_str());
-  link->SetDescription(identity);
+  link->SetDescription(display_name);
   link->SetIconLocation(icon.c_str(), 0);
   Microsoft::WRL::ComPtr<IPropertyStore> properties;
   HRESULT hr = link.As(&properties);
@@ -51,7 +52,7 @@ bool RefreshNotificationIdentity(const std::string& icon_path) {
   if (RegCreateKeyExW(HKEY_CURRENT_USER, key_path.c_str(), 0, nullptr, 0,
       KEY_SET_VALUE, nullptr, &key, nullptr) == ERROR_SUCCESS) {
     RegSetValueExW(key, L"DisplayName", 0, REG_SZ,
-        reinterpret_cast<const BYTE*>(identity), sizeof(identity));
+        reinterpret_cast<const BYTE*>(display_name), sizeof(display_name));
     RegSetValueExW(key, L"IconUri", 0, REG_SZ,
         reinterpret_cast<const BYTE*>(icon.c_str()), static_cast<DWORD>((icon.size() + 1) * sizeof(wchar_t)));
     RegCloseKey(key);

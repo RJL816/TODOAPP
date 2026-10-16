@@ -127,7 +127,9 @@ class ReminderService {
       } catch (e) {
         debugPrint('通知图标刷新失败：$e');
       }
-      await _localNotifier.setup(appName: AppIdentity.fullName);
+      // local_notifier also uses appName as AUMID; Windows forbids spaces in it.
+      // The native identity registration keeps the localized display name.
+      await _localNotifier.setup(appName: AppIdentity.englishName);
       _notificationsAllowed = true;
       _exactAllowed = true; // 进程内定时器即精确
       _timezoneOk = true;
