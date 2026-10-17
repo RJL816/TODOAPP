@@ -60,6 +60,11 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="User-started pomodoro countdown or stopwatch with visible ongoing timer notification and optional floating timer" />
         </service>
+        <service android:name=".WorkoutOverlayService" android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-started workout stopwatch with ongoing timer notification and optional floating clock" />
+        </service>
         <receiver android:name=".FocusTimerEndReceiver" android:exported="false" />
         <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver"
             android:exported="false" />

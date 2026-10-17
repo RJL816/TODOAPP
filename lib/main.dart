@@ -29,6 +29,8 @@ import 'services/reminder_service.dart';
 import 'services/pomodoro_service.dart';
 import 'services/focus_analytics_service.dart';
 import 'services/training_service.dart';
+import 'services/workout_session_service.dart';
+import 'ui/workout_resume_banner.dart';
 import 'services/diet_service.dart';
 import 'services/ai_service.dart';
 import 'services/update_service.dart';
@@ -239,6 +241,7 @@ void main() async {
 
   // 初始化健身服务（注册训练提醒排程）
   await TrainingService.instance.init();
+  await WorkoutSessionService.instance.init();
 
   // Windows：拦截关闭按钮（驻留托盘 or 真退出由设置决定）
   if (Platform.isWindows) {
@@ -1116,6 +1119,11 @@ class _TodoHomePageState extends State<TodoHomePage>
                             right: false,
                             child: _buildTitleBarWithStreak(theme),
                           ),
+
+                        Visibility(
+                            visible: !immersiveFocus,
+                            maintainState: true,
+                            child: const WorkoutResumeBanner()),
 
                         // 今日进度条（只在今日任务页显示）
                         Expanded(
@@ -4246,7 +4254,10 @@ class _SettingsDialogState extends State<_SettingsDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (Platform.isAndroid) const FocusOverlaySettingsSection(),
+          if (Platform.isAndroid) ...[
+            const FocusOverlaySettingsSection(),
+            const FocusOverlaySettingsSection(training: true),
+          ],
           // AI 助手配置
           _aiSection(theme),
           const SizedBox(height: 6),

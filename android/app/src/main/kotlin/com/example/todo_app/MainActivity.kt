@@ -10,8 +10,48 @@ import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
+    private var openWorkoutPending = false
+    private var workoutChannel: MethodChannel? = null
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("openWorkout", false)) {
+            openWorkoutPending = true
+            workoutChannel?.invokeMethod("open", null)
+        }
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        workoutChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.todo.app/workout")
+        workoutChannel!!.setMethodCallHandler { call, result ->
+                try {
+                    when (call.method) {
+                        "consumeOpen" -> {
+                            val pending = openWorkoutPending || intent.getBooleanExtra("openWorkout", false)
+                            openWorkoutPending = false
+                            intent.removeExtra("openWorkout")
+                            result.success(pending)
+                        }
+                        "sync" -> {
+                            val timer = Intent(this, WorkoutOverlayService::class.java).apply {
+                                putExtra("stopwatch", true)
+                                putExtra("start", call.argument<Number>("startEpochMs")?.toLong() ?: System.currentTimeMillis())
+                                putExtra("title", call.argument<String>("title") ?: "训练")
+                                putExtra("phase", "workout")
+                                putExtra("overlay", call.argument<Boolean>("overlay") ?: false)
+                            }
+                            if (Build.VERSION.SDK_INT >= 26) startForegroundService(timer) else startService(timer)
+                            result.success(true)
+                        }
+                        "stop" -> {
+                            stopService(Intent(this, WorkoutOverlayService::class.java))
+                            result.success(true)
+                        }
+                        else -> result.notImplemented()
+                    }
+                } catch (e: Exception) { result.error("workout_timer_unavailable", e.message, null) }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.todo.app/screen")
             .setMethodCallHandler { call, result ->
                 if (call.method == "setFocusKeepOn") {

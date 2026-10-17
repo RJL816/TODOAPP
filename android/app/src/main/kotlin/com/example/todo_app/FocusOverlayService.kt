@@ -20,7 +20,14 @@ import android.view.WindowManager
 import kotlin.math.abs
 
 /** 专注计时悬浮窗：暖白钟盘，可拖动，点击回到应用。 */
-class FocusOverlayService : Service() {
+open class FocusOverlayService : Service() {
+    protected open val training = false
+    private val notificationId get() = if (training) 4000012 else NOTIFICATION_ID
+    private val channelId get() = if (training) "workout_running" else CHANNEL
+    private fun launchIntent(): Intent? = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+        if (training) { action = "com.todo.app.OPEN_WORKOUT"; putExtra("openWorkout", true) }
+        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+    }
     private var windowManager: WindowManager? = null
     private var overlayView: View? = null
     private var clockView: FocusClockView? = null
@@ -66,8 +73,8 @@ class FocusOverlayService : Service() {
         title = intent.getStringExtra(EXTRA_TITLE) ?: ""
         phase = intent.getStringExtra("phase") ?: "focus"
         plannedSeconds = intent.getIntExtra("planned", 1)
-        startForeground(NOTIFICATION_ID, timerNotification())
-        FocusTimerEndReceiver.schedule(this, if (paused || stopwatch) 0L else targetEpochMs)
+        startForeground(notificationId, timerNotification())
+        if (!training) FocusTimerEndReceiver.schedule(this, if (paused || stopwatch) 0L else targetEpochMs)
         if (intent.getBooleanExtra("overlay", false) && Settings.canDrawOverlays(this)) {
             try { showOverlay() } catch (_: RuntimeException) { removeOverlay() }
         } else removeOverlay()
@@ -77,7 +84,7 @@ class FocusOverlayService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun phaseTitle() = when (phase) {
+    private fun phaseTitle() = if (training) "训练计时" else when (phase) {
         "shortBreak" -> "短休息"
         "longBreak" -> "长休息"
         else -> "番茄专注"
@@ -87,16 +94,16 @@ class FocusOverlayService : Service() {
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= 26) {
             manager.createNotificationChannel(NotificationChannel(
-                CHANNEL, "正在进行的番茄钟", NotificationManager.IMPORTANCE_LOW).apply {
+                channelId, if (training) "正在进行的训练" else "正在进行的番茄钟", NotificationManager.IMPORTANCE_LOW).apply {
                 description = "通知栏与锁屏计时，不播放声音"
                 setSound(null, null)
                 enableVibration(false)
             })
         }
-        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CHANNEL)
+        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId)
             else Notification.Builder(this)
-        val launch = packageManager.getLaunchIntentForPackage(packageName)!!
-        val open = PendingIntent.getActivity(this, 4000002, launch,
+        val launch = launchIntent()!!
+        val open = PendingIntent.getActivity(this, notificationId, launch,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         builder.setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(phaseTitle() + if (paused) " · 已暂停" else "")
@@ -152,8 +159,8 @@ class FocusOverlayService : Service() {
             PixelFormat.TRANSLUCENT,
         )
         params.gravity = Gravity.TOP or Gravity.START
-        params.x = 40
-        params.y = 200
+        params.x = if (training) (resources.displayMetrics.widthPixels - 140 * density).toInt().coerceAtLeast(0) else 40
+        params.y = if (training) (240 * density).toInt() else 200
 
         // 拖动 + 点击回应用
         var downRawX = 0f
@@ -186,8 +193,7 @@ class FocusOverlayService : Service() {
                 }
                 MotionEvent.ACTION_UP -> {
                     if (!moved) {
-                        val launch = packageManager.getLaunchIntentForPackage(packageName)
-                        launch?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        val launch = launchIntent()
                         if (launch != null) startActivity(launch)
                     }
                     true

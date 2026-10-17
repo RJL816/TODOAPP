@@ -80,12 +80,12 @@ class FocusClockView(context: Context) : View(context) {
         textPaint.textAlign = Paint.Align.CENTER
         textPaint.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
         textPaint.color = accent; textPaint.textSize = 9f
-        canvas.drawText(if (stopwatch) "正计时" else phase, cx, cy - 17f, textPaint)
+        canvas.drawText(if (phase == "训练计时") "训练计时" else if (stopwatch) "正计时" else phase, cx, cy - 17f, textPaint)
         textPaint.color = Color.parseColor("#263F37")
         textPaint.textSize = if (seconds >= 3600) 15f else 21f
         canvas.drawText(formatTime(seconds), cx, cy + 7f, textPaint)
         textPaint.textSize = 8.5f; textPaint.color = Color.parseColor("#7E8A7E")
-        canvas.drawText(if (paused) "已暂停" else if (stopwatch) "专注积累" else "剩余时间", cx, cy + 22f, textPaint)
+        canvas.drawText(if (paused) "已暂停" else if (phase == "训练计时") "训练进行中" else if (stopwatch) "专注积累" else "剩余时间", cx, cy + 22f, textPaint)
         paint.style = Paint.Style.FILL; paint.color = Color.parseColor("#E622443B")
         canvas.drawRoundRect(RectF(6f, 113f, 114f, 135f), 11f, 11f, paint)
         textPaint.textSize = 10f; textPaint.color = Color.parseColor("#F5EFE3")

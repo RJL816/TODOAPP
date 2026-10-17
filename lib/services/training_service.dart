@@ -223,6 +223,7 @@ class TrainingService {
   Future<int> saveWorkout({
     required WorkoutLog log,
     required List<WorkoutSet> sets,
+    bool deduplicateSession = false,
   }) async {
     if (log.completed && log.estimatedCalories == null) {
       final profile = await FatLossService.instance.loadProfile();
@@ -240,6 +241,16 @@ class TrainingService {
     }
     final isar = IsarService.instance.isar;
     final workoutId = await isar.writeTxn(() async {
+      // A saved draft may survive a failed cleanup or process death after commit.
+      if (deduplicateSession) {
+        final existing = await isar.workoutLogs
+            .filter()
+            .startedAtEqualTo(log.startedAt)
+            .and()
+            .titleEqualTo(log.title)
+            .findFirst();
+        if (existing != null) return existing.id;
+      }
       final id = await isar.workoutLogs.put(log);
       for (final s in sets) {
         s.workoutId = id;

@@ -44,7 +44,13 @@ class _PlanPageState extends State<PlanPage> {
   DateTime _monday = _weekStart(DateTime.now());
   int _selectedWeekday = DateTime.now().weekday - 1;
   bool _showTimetable = false;
-  late Future<List<_PlanDay>> _days = _loadWeek();
+  late Future<List<_PlanDay>> _days;
+
+  @override
+  void initState() {
+    super.initState();
+    _days = _loadWeek();
+  }
 
   static DateTime _weekStart(DateTime date) {
     final day = DateTime(date.year, date.month, date.day);
@@ -82,8 +88,7 @@ class _PlanPageState extends State<PlanPage> {
     for (var index = 0; index < 7; index++) {
       final date = monday.add(Duration(days: index));
       final todos = await IsarService.instance.getTodosForDate(date);
-      final training =
-          await TrainingService.instance.getPlansForWeekday(date.weekday);
+      final training = await TrainingService.instance.getPlansForDate(date);
       days.add(_PlanDay(
         date,
         courses[date.weekday] ?? [],

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/pomodoro_service.dart';
+import '../services/workout_session_service.dart';
 import '../services/reminder_service.dart';
 
 /// 主设置中的明确入口；授权返回后自动完成用户刚刚发起的开启操作。
 class FocusOverlaySettingsSection extends StatefulWidget {
-  const FocusOverlaySettingsSection({super.key});
+  const FocusOverlaySettingsSection({super.key, this.training = false});
+  final bool training;
   @override
   State<FocusOverlaySettingsSection> createState() =>
       _FocusOverlaySettingsSectionState();
@@ -16,6 +18,10 @@ class _FocusOverlaySettingsSectionState
     extends State<FocusOverlaySettingsSection> with WidgetsBindingObserver {
   static const _channel = MethodChannel('com.todo.app/focus_overlay');
   final _service = PomodoroService.instance;
+  final _workout = WorkoutSessionService.instance;
+  Future<void> _setEnabled(bool value) => widget.training
+      ? _workout.setOverlayEnabled(value)
+      : _service.setFocusOverlayEnabled(value);
   bool _waitingPermission = false;
   bool _busy = false;
   String? _message;
@@ -43,7 +49,7 @@ class _FocusOverlaySettingsSectionState
     _waitingPermission = false;
     try {
       if (await _channel.invokeMethod<bool>('canDrawOverlays') == true) {
-        await _service.setFocusOverlayEnabled(true);
+        await _setEnabled(true);
         if (mounted) setState(() => _message = '已开启；开始计时后显示悬浮钟表');
       } else if (mounted) {
         setState(() => _message = '尚未授予悬浮权限，通知栏计时仍可使用');
@@ -65,7 +71,7 @@ class _FocusOverlaySettingsSectionState
         await _channel.invokeMethod('openOverlayPermissionSettings');
         if (mounted) setState(() => _message = '请允许显示在其他应用上层，返回后会自动开启');
       } else {
-        await _service.setFocusOverlayEnabled(value);
+        await _setEnabled(value);
       }
     } catch (_) {
       _waitingPermission = false;
@@ -77,16 +83,21 @@ class _FocusOverlaySettingsSectionState
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-        listenable: _service,
+        listenable: widget.training ? _workout : _service,
         builder: (context, _) =>
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('专注与提醒', style: Theme.of(context).textTheme.titleMedium),
+          Text(widget.training ? '训练计时' : '专注与提醒',
+              style: Theme.of(context).textTheme.titleMedium),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             secondary: const Icon(Icons.watch_later_outlined),
-            title: const Text('悬浮钟表'),
-            subtitle: const Text('切到其他应用也能看计时；可拖动，点击返回拾序'),
-            value: _service.focusOverlayEnabled,
+            title: Text(widget.training ? '训练悬浮钟表' : '专注悬浮钟表'),
+            subtitle: Text(widget.training
+                ? '开始训练后显示；可拖动，点击继续记录，与专注独立计时'
+                : '切到其他应用也能看计时；可拖动，点击返回拾序'),
+            value: widget.training
+                ? _workout.overlayEnabled
+                : _service.focusOverlayEnabled,
             onChanged: _busy ? null : _toggle,
           ),
           if (_message != null)
@@ -118,7 +129,10 @@ class _FocusOverlaySettingsSectionState
                   _channel.invokeMethod('openFocusBackgroundSettings'),
             ),
           ]),
-          Text('通知栏与锁屏会显示计时，到点发送提醒。若锁屏后延迟，可允许后台运行。',
+          Text(
+              widget.training
+                  ? '返回页面和切换应用不会结束训练。完成或放弃时才会停止计时；通知栏也可返回记录。'
+                  : '通知栏与锁屏会显示计时，到点发送提醒。若锁屏后延迟，可允许后台运行。',
               style: Theme.of(context).textTheme.bodySmall),
           const Divider(height: 28),
         ]),
